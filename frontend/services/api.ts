@@ -37,6 +37,9 @@ class ApiClient {
     const url = `${this.baseURL}${endpoint}`;
     
     try {
+      if (__DEV__) {
+        console.log(`[api] ${options.method ?? 'GET'} ${url}`);
+      }
       const response = await fetch(url, {
         ...options,
         headers,
@@ -71,7 +74,7 @@ class ApiClient {
     } catch (error) {
       if (error instanceof Error) {
         throw {
-          message: error.message,
+          message: `Unable to reach backend at ${url}. ${error.message}`,
           status: 0,
         } as ApiError;
       }

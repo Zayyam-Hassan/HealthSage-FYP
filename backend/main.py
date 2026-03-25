@@ -5,7 +5,7 @@ from api.chatbot_routes import router as chatbot_router
 from api.compatibility_routes import router as compatibility_router
 from api.explain_routes import router as explain_router
 from api.lifestyle_routes import router as lifestyle_router
-from api.medication_routes import router as medication_router
+from api.medication_routes import router as medication_router, rag_router as medication_rag_router
 from api.prediction_routes import router as prediction_router
 from api.risk_routes import router as risk_router
 from api.mongo_routes import router as mongo_router
@@ -43,6 +43,7 @@ app.include_router(explain_router, prefix=API_V1_PREFIX)
 app.include_router(chatbot_router, prefix=API_V1_PREFIX)
 app.include_router(lifestyle_router, prefix=API_V1_PREFIX)
 app.include_router(medication_router, prefix=API_V1_PREFIX)
+app.include_router(medication_rag_router, prefix=API_V1_PREFIX)
 app.include_router(prediction_router, prefix=API_V1_PREFIX)
 app.include_router(mongo_router, prefix=API_V1_PREFIX)
 app.include_router(auth_router, prefix=API_V1_PREFIX)

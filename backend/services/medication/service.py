@@ -19,9 +19,21 @@ from app.schemas.medication_recommendation import (
     MedicationRecommendationOutput,
 )
 
-from .context_builder import build_context_summary, build_medication_context, build_tailoring_summary
+from .context_builder import build_context_summary, build_medication_context
+from .guideline_rag import (
+    build_guideline_query,
+    retrieve_guideline_evidence,
+    summarize_guideline_influence,
+)
+from .rag_retriever import (
+    build_medication_evidence_block,
+    build_medication_retrieval_query,
+    ground_medication_recommendations,
+    merge_medication_evidence_results,
+    search_medication_knowledge,
+)
 from .safety_filter import check_medication_safety
-from .serper_retriever import compress_medical_evidence, retrieve_medication_guidance
+from .serper_retriever import retrieve_online_medication_evidence
 from . import lifecycle as lifecycle_events
 from .agents import (
     run_clinical_reasoning,
@@ -113,9 +125,6 @@ def run_medication_pipeline(
         )
         raise
 
-    serper_results: List[Dict[str, Any]] = retrieve_medication_guidance(context, top_k=5)
-    evidence_block = compress_medical_evidence(serper_results)
-
     # ----- Agent 1: Clinical Reasoning -----
     agent_name = "clinical_reasoning_agent"
     lifecycle_events.emit_and_callback(
@@ -151,6 +160,29 @@ def run_medication_pipeline(
             on_event,
         )
         raise
+
+    retrieval_query = build_medication_retrieval_query(context, clinical_output)
+    guideline_query = build_guideline_query(context, clinical_output=clinical_output)
+    local_evidence = search_medication_knowledge(retrieval_query, top_k=8)
+    guideline_evidence = retrieve_guideline_evidence(guideline_query, patient_context=context, top_k=5)
+    logger.info(
+        "guideline_query_built",
+        extra={
+            "request_id": request_id,
+            "patient_id": patient_id,
+            "guideline_query": guideline_query[:250],
+            "guideline_hits": len(guideline_evidence),
+        },
+    )
+    online_evidence = retrieve_online_medication_evidence(retrieval_query, top_k=6)
+    retrieved_evidence = merge_medication_evidence_results(local_evidence, online_evidence, limit=12)
+    retrieved_evidence = merge_medication_evidence_results(retrieved_evidence, guideline_evidence, limit=18)
+    if not retrieved_evidence:
+        logger.warning(
+            "medication_retrieval_no_hits",
+            extra={"request_id": request_id, "patient_id": patient_id, "query": retrieval_query[:200]},
+        )
+    evidence_block = build_medication_evidence_block(retrieved_evidence)
 
     # ----- Agent 2: Candidate Generator -----
     agent_name = "medication_candidate_generator_agent"
@@ -188,6 +220,25 @@ def run_medication_pipeline(
             on_event,
         )
         raise
+
+    candidate_names = [c.name for c in candidate_output.candidate_medications if getattr(c, "name", None)]
+    if candidate_names:
+        targeted_online_evidence = retrieve_online_medication_evidence(
+            retrieval_query,
+            drug_names=candidate_names,
+            top_k=8,
+        )
+        retrieved_evidence = merge_medication_evidence_results(
+            retrieved_evidence,
+            targeted_online_evidence,
+            limit=16,
+        )
+        retrieved_evidence = merge_medication_evidence_results(
+            retrieved_evidence,
+            guideline_evidence,
+            limit=18,
+        )
+        evidence_block = build_medication_evidence_block(retrieved_evidence)
 
     # ----- Agent 3: Safety Validator (hard rule: if fails, return degraded) -----
     agent_name = "safety_validator_agent"
@@ -290,8 +341,25 @@ def run_medication_pipeline(
         consensus_output=consensus_output,
         neo4j_safety=neo4j_safety,
         evidence_block=evidence_block,
-        serper_results=serper_results,
+        retrieved_evidence=retrieved_evidence,
         provider=preferred_provider,
+    )
+    grounded_response = ground_medication_recommendations(
+        patient_context=context,
+        recommendation_request={"query": retrieval_query, "request_id": request_id},
+        retrieved_medication_evidence=retrieved_evidence,
+        existing_api_result={"recommended_medications": consensus_output.recommended_medications},
+    )
+    guideline_influence = summarize_guideline_influence(guideline_evidence)
+    logger.info(
+        "grounded_medication_response_generated",
+        extra={
+            "request_id": request_id,
+            "patient_id": patient_id,
+            "guideline_influenced": bool(guideline_evidence),
+            "guideline_influence": guideline_influence,
+            "evidence_strength": grounded_response.evidence_strength,
+        },
     )
     pipeline_duration_ms = (time.perf_counter() - pipeline_start) * 1000
     lifecycle_events.emit_and_callback(
@@ -312,6 +380,8 @@ def run_medication_pipeline(
         safety_output=safety_output,
         neo4j_safety=neo4j_safety,
         agent_trace=agent_trace,
+        grounded_response=grounded_response,
+        retrieved_evidence=retrieved_evidence,
     )
 
 
@@ -400,7 +470,7 @@ def _store_pipeline_result(
     consensus_output: Any,
     neo4j_safety: Dict[str, Any],
     evidence_block: str,
-    serper_results: List[Dict[str, Any]],
+    retrieved_evidence: List[Any],
     provider: str,
 ) -> str:
     db = get_db()
@@ -412,7 +482,10 @@ def _store_pipeline_result(
     doc = {
         "patient_id": oid,
         "context_snapshot": context,
-        "retrieved_sources": serper_results,
+        "retrieved_sources": [
+            item.model_dump() if hasattr(item, "model_dump") else item
+            for item in retrieved_evidence
+        ],
         "evidence_block": evidence_block,
         "clinical_reasoning": clinical_output.clinical_summary if hasattr(clinical_output, "clinical_summary") else str(clinical_output),
         "candidate_output": candidate_output.model_dump() if hasattr(candidate_output, "model_dump") else {},
@@ -429,7 +502,7 @@ def _store_pipeline_result(
         "event": "medication_recommendation",
         "patient_id": patient_id,
         "pipeline": "multi_agent",
-        "serper_results_count": len(serper_results),
+        "retrieved_evidence_count": len(retrieved_evidence),
         "safety_result": neo4j_safety,
         "recommendation_id": rec_id,
         "created_at": datetime.now(timezone.utc),
@@ -447,6 +520,8 @@ def _build_pipeline_response(
     safety_output: Any,
     neo4j_safety: Dict[str, Any],
     agent_trace: List[Dict[str, Any]],
+    grounded_response: Any,
+    retrieved_evidence: List[Any],
 ) -> Dict[str, Any]:
     recs = consensus_output.recommended_medications or []
     primary = recs[0] if recs else None
@@ -466,6 +541,13 @@ def _build_pipeline_response(
         "missing_information": [],
         "doctor_note": "Medication decisions must always be confirmed by the clinician.",
         "safety_flags": neo4j_safety,
+        "grounded_response": grounded_response.model_dump() if hasattr(grounded_response, "model_dump") else grounded_response,
+        "retrieved_evidence": [
+            item.model_dump() if hasattr(item, "model_dump") else item
+            for item in retrieved_evidence
+        ],
+        "evidence_strength": getattr(grounded_response, "evidence_strength", "weak"),
+        "notes": getattr(grounded_response, "notes", ""),
     }
 
 

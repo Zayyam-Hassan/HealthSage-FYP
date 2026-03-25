@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import httpx
+
+from app.schemas.medication_recommendation import MedicationRagSearchResult
 
 try:
     from dotenv import load_dotenv
@@ -30,6 +33,13 @@ TRUSTED_DOMAINS = (
     "mayoclinic.org",
     "clevelandclinic.org",
     "uptodate.com",
+    "drugbank.com",
+    "drugs.com",
+    "medlineplus.gov",
+    "rxlist.com",
+    "accessdata.fda.gov",
+    "dailymed.nlm.nih.gov",
+    "webmd.com",
 )
 
 
@@ -59,6 +69,86 @@ def _search(query: str, num: int = 8) -> List[Dict[str, Any]]:
 def _is_trusted(link: str) -> bool:
     link_lower = link.lower()
     return any(d in link_lower for d in TRUSTED_DOMAINS)
+
+
+def _normalize_drug_name(name: str) -> str:
+    return (name or "").strip().lower()
+
+
+def _dedupe_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen: set[tuple[str, str]] = set()
+    deduped: List[Dict[str, Any]] = []
+    for result in results:
+        url = (result.get("url") or result.get("link") or "").strip()
+        title = (result.get("title") or "").strip().lower()
+        key = (url, title)
+        if not url or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(result)
+    return deduped
+
+
+def _guess_drug_name(query: str, title: str, snippet: str, drug_names: Optional[List[str]] = None) -> str:
+    haystack = f"{title} {snippet}".lower()
+    for candidate in drug_names or []:
+        normalized = _normalize_drug_name(candidate)
+        if normalized and normalized in haystack:
+            return candidate
+    if drug_names:
+        return drug_names[0]
+    query_tokens = [token for token in query.split() if len(token) > 2]
+    if query_tokens:
+        return query_tokens[0].strip().title()
+    return "Online medication evidence"
+
+
+def _score_result(rank: int, url: str) -> float:
+    score = max(0.2, 0.95 - (rank * 0.07))
+    if _is_trusted(url):
+        score += 0.03
+    return round(min(score, 0.99), 4)
+
+
+def _section_from_url(url: str) -> str:
+    host = urlparse(url).netloc.lower()
+    if "drugbank.com" in host:
+        return "drugbank_summary"
+    if "drugs.com" in host:
+        return "drug_reference"
+    if "accessdata.fda.gov" in host or "dailymed.nlm.nih.gov" in host:
+        return "label_information"
+    return "web_result"
+
+
+def build_medication_web_queries(query: str, drug_names: Optional[List[str]] = None) -> List[str]:
+    terms: List[str] = []
+    normalized_names = []
+    for name in drug_names or []:
+        cleaned = name.strip()
+        if cleaned and cleaned.lower() not in {item.lower() for item in normalized_names}:
+            normalized_names.append(cleaned)
+
+    if normalized_names:
+        for name in normalized_names[:4]:
+            terms.extend([
+                f"{name} diabetes medication site:drugbank.com",
+                f"{name} diabetes medication site:drugs.com",
+                f"{name} prescribing information site:accessdata.fda.gov",
+            ])
+    else:
+        terms.extend([
+            f"{query} diabetes medication site:drugbank.com",
+            f"{query} diabetes medication site:drugs.com",
+            f"{query} diabetes medication site:medlineplus.gov",
+        ])
+
+    # Keep one general guidance pass for broader context.
+    terms.extend([
+        f"{query} diabetes medication treatment site:diabetes.org",
+        f"{query} diabetes pharmacotherapy site:nih.gov",
+    ])
+    return terms
 
 
 def retrieve_medication_guidance(context: Dict[str, Any], top_k: int = 5) -> List[Dict[str, Any]]:
@@ -92,6 +182,67 @@ def retrieve_medication_guidance(context: Dict[str, Any], top_k: int = 5) -> Lis
     other = [x for x in combined if x not in trusted_first]
     ordered = trusted_first + other
     return ordered[: max(top_k, 10)]
+
+
+def retrieve_online_medication_evidence(
+    query: str,
+    drug_names: Optional[List[str]] = None,
+    top_k: int = 8,
+) -> List[MedicationRagSearchResult]:
+    """
+    Retrieve medication evidence from online sources like DrugBank, Drugs.com,
+    FDA labeling pages, and diabetes guidance sites via Serper.
+    """
+    queries = build_medication_web_queries(query, drug_names=drug_names)
+    aggregated: List[Dict[str, Any]] = []
+    for search_query in queries:
+        for result in _search(search_query, num=5):
+            link = (result.get("link") or "").strip()
+            if not link:
+                continue
+            aggregated.append({
+                "title": result.get("title", ""),
+                "url": link,
+                "snippet": result.get("snippet", ""),
+            })
+
+    deduped = _dedupe_results(aggregated)
+    trusted_first = [item for item in deduped if _is_trusted(item.get("url", ""))]
+    ordered = trusted_first + [item for item in deduped if item not in trusted_first]
+
+    search_results: List[MedicationRagSearchResult] = []
+    for index, item in enumerate(ordered[:top_k]):
+        title = (item.get("title") or "").strip()
+        url = (item.get("url") or "").strip()
+        snippet = (item.get("snippet") or "").strip()
+        drug_name = _guess_drug_name(query, title, snippet, drug_names=drug_names)
+        section = _section_from_url(url)
+        search_results.append(
+            MedicationRagSearchResult(
+                drug_name=drug_name,
+                section=section,
+                content=snippet or title or url,
+                source_url=url,
+                source_title=title or None,
+                source_type="online_research",
+                source=title or url,
+                relevance=_section_from_url(url).replace("_", " "),
+                score=_score_result(index, url),
+                document_id=f"serper:{index + 1}",
+                chunk_id=f"serper:{index + 1}:{section}",
+            )
+        )
+
+    logger.info(
+        "online_medication_evidence_retrieved",
+        extra={
+            "query": query[:200],
+            "top_k": top_k,
+            "drug_names": drug_names or [],
+            "result_count": len(search_results),
+        },
+    )
+    return search_results
 
 
 def compress_medical_evidence(results: List[Dict[str, Any]]) -> str:

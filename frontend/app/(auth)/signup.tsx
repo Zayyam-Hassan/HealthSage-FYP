@@ -14,6 +14,7 @@ import AppDialog from '@/components/AppDialog';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
 import { images } from '@/constants/images';
+import { authService } from '@/services/auth';
 import type { UserRole } from '@/services/auth';
 
 export default function SignupScreen() {
@@ -82,7 +83,6 @@ export default function SignupScreen() {
     setLoading(true);
 
     try {
-      const { authService } = await import('@/services/auth');
       const signupResponse = await authService.signup({
         username: username.trim(),
         email: email.trim(),

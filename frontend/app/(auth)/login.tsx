@@ -14,6 +14,7 @@ import AppDialog from '@/components/AppDialog';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
 import { images } from '@/constants/images';
+import { authService } from '@/services/auth';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -61,9 +62,8 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      const { authService } = await import('@/services/auth');
       const user = await authService.login({
-        email,
+        email: email.trim(),
         password,
       });
 

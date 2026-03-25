@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 """Strict output schema for medication recommendation engine (CDS, not prescriber)."""
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -50,6 +52,134 @@ class RecommendMedicationResponse(BaseModel):
     safety_flags: Optional[Dict[str, Any]] = None
     recommendation_id: Optional[str] = None
     patient_id: Optional[str] = None
+    grounded_response: Optional["GroundedMedicationRecommendationResponse"] = None
+    retrieved_evidence: List["MedicationRagSearchResult"] = Field(default_factory=list)
+    evidence_strength: Optional[Literal["strong", "moderate", "weak"]] = None
+    notes: Optional[str] = None
+
+
+class NormalizedDrugEntry(BaseModel):
+    """Normalized internal representation of one medication knowledge-base document."""
+    document_id: str
+    drug_name: str
+    aliases: List[str] = Field(default_factory=list)
+    summary: str = ""
+    warnings: str = ""
+    side_effects: str = ""
+    before_taking: str = ""
+    usage_instructions: str = ""
+    precautions: str = ""
+    interactions: str = ""
+    source_url: str = ""
+    rating: Optional[float] = None
+    review_count: Optional[int] = None
+    raw_source: Dict[str, Any] = Field(default_factory=dict)
+
+
+class MedicationChunkMetadata(BaseModel):
+    """Metadata attached to each medication chunk."""
+    document_id: str
+    chunk_id: str
+    drug_name: str
+    section: str
+    source_url: str = ""
+
+
+class MedicationKnowledgeChunk(BaseModel):
+    """One semantically meaningful medication chunk used for retrieval."""
+    metadata: MedicationChunkMetadata
+    content: str
+
+
+class MedicationRagFilters(BaseModel):
+    """Optional metadata filters for medication retrieval."""
+    drug_name: Optional[str] = None
+    section: Optional[str] = None
+
+
+class MedicationRagSearchRequest(BaseModel):
+    """Debug/search request for the medication RAG index."""
+    query: str = Field(..., min_length=1)
+    top_k: int = Field(default=5, ge=1, le=20)
+    filters: MedicationRagFilters = Field(default_factory=MedicationRagFilters)
+    patient_context: Optional[Dict[str, Any]] = None
+
+
+class MedicationRagSearchResult(BaseModel):
+    """One retrieved medication chunk."""
+    drug_name: str
+    section: str
+    content: str
+    source_url: str = ""
+    source_title: Optional[str] = None
+    source_type: Literal["local_drug_rag", "guideline", "api_result", "online_research"] = "local_drug_rag"
+    source: str = ""
+    relevance: str = ""
+    score: float = Field(default=0.0, ge=0.0)
+    document_id: str
+    chunk_id: str
+    guideline_id: Optional[str] = None
+    condition_type: Optional[str] = None
+    recommendation_type: Optional[str] = None
+
+
+class MedicationRagSearchResponse(BaseModel):
+    """Debug/search response for the medication RAG index."""
+    query: str
+    results: List[MedicationRagSearchResult] = Field(default_factory=list)
+    guideline_query: Optional[str] = None
+    guideline_results: List[MedicationRagSearchResult] = Field(default_factory=list)
+    influence_notes: List[str] = Field(default_factory=list)
+
+
+class GuidelineEntry(BaseModel):
+    """Lightweight treatment-guideline entry."""
+    id: str
+    title: str
+    condition: str
+    recommendation: str
+    notes: str = ""
+    source: str
+    source_url: str = ""
+    condition_type: str = ""
+    recommendation_type: str = ""
+
+
+class SupportingMedicationEvidence(BaseModel):
+    """Evidence block attached to one grounded recommendation."""
+    drug_name: str
+    section: str
+    content: str
+    source_url: str = ""
+    source_title: Optional[str] = None
+    source_type: Literal["local_drug_rag", "guideline", "api_result", "online_research"] = "local_drug_rag"
+    source: str = ""
+    relevance: str = ""
+    guideline_id: Optional[str] = None
+    condition_type: Optional[str] = None
+    recommendation_type: Optional[str] = None
+
+
+class GroundedRecommendationEvidenceBlock(BaseModel):
+    """Grounded recommendation item derived from retrieved evidence and agent output."""
+    medication_name: str
+    why_it_matches: str
+    why_it_matches_patient: str = ""
+    key_warnings: List[str] = Field(default_factory=list)
+    key_interactions: List[str] = Field(default_factory=list)
+    supporting_evidence: List[SupportingMedicationEvidence] = Field(default_factory=list)
+    guideline_support: List[SupportingMedicationEvidence] = Field(default_factory=list)
+    drug_evidence: List[SupportingMedicationEvidence] = Field(default_factory=list)
+    confidence: Literal["high", "medium", "low"] = "low"
+
+
+class GroundedMedicationRecommendationResponse(BaseModel):
+    """Grounded structured response for medication recommendations."""
+    recommendations: List[GroundedRecommendationEvidenceBlock] = Field(default_factory=list)
+    general_warnings: List[str] = Field(default_factory=list)
+    evidence_strength: Literal["strong", "moderate", "weak"] = "weak"
+    notes: str = ""
+    disclaimer: str = "Medication decisions must always be confirmed by the clinician."
 
 
 # ----- Multi-agent pipeline stage outputs -----
@@ -166,3 +296,6 @@ class MedicationRecommendationDoc(BaseModel):
     created_at: datetime = Field(default_factory=_utc_now)
 
     model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
+
+
+RecommendMedicationResponse.model_rebuild()

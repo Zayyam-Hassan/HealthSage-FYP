@@ -1,6 +1,24 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Platform } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+
 import { InputProps } from './types';
+
+const COLORS = {
+  background: '#FFFFFF',
+  border: '#E5E7EB',
+  primary: '#FAAD9E',
+  error: '#EF4444',
+  text: '#111827',
+  textSecondary: '#6B7280',
+  placeholder: '#9CA3AF',
+};
 
 const Input: React.FC<InputProps> = ({
   type = 'text',
@@ -18,13 +36,12 @@ const Input: React.FC<InputProps> = ({
   className = '',
   secureTextEntry,
 }) => {
-  const [isFocused, setIsFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const isPassword = type === 'password';
-  const shouldShowPassword = isPassword && showPassword;
+  const isPassword = type === 'password' || secureTextEntry;
+  const shouldHidePassword = isPassword && !showPassword;
 
-  const getKeyboardType = () => {
+  const keyboardType = useMemo(() => {
     switch (type) {
       case 'email':
         return 'email-address';
@@ -35,76 +52,134 @@ const Input: React.FC<InputProps> = ({
       default:
         return 'default';
     }
-  };
-
-  const borderColor = error
-    ? 'border-error'
-    : isFocused
-    ? 'border-primary'
-    : 'border-border';
+  }, [type]);
 
   return (
-    <View className={`mb-4 ${className}`.trim()}>
-      {label && (
-        <Text className="text-sm font-medium text-text mb-2">
+    <View style={styles.wrapper}>
+      {label ? (
+        <Text style={styles.label}>
           {label}
-          {required && <Text className="text-error"> *</Text>}
+          {required ? <Text style={styles.required}> *</Text> : null}
         </Text>
-      )}
+      ) : null}
+
       <View
-        className={`
-          flex-row
-          items-center
-          border-2
-          ${borderColor}
-          rounded-xl
-          px-4
-          py-3
-          bg-background
-          ${disabled ? 'opacity-50' : ''}
-          ${isFocused ? 'shadow-sm border-primary' : ''}
-        `.trim().replace(/\s+/g, ' ')}
+        style={[
+          styles.inputContainer,
+          error ? styles.inputContainerError : null,
+          disabled ? styles.inputContainerDisabled : null,
+        ]}
       >
-        {icon && <View className="mr-3">{icon}</View>}
+        {icon ? <View style={styles.icon}>{icon}</View> : null}
+
         <TextInput
-          className="flex-1 text-base text-text"
+          style={[
+            styles.input,
+            multiline ? styles.multilineInput : null,
+            disabled ? styles.inputDisabled : null,
+          ]}
           placeholder={placeholder}
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={COLORS.placeholder}
           value={value}
           onChangeText={onChangeText}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          keyboardType={getKeyboardType()}
+          keyboardType={keyboardType}
           autoCapitalize={type === 'email' ? 'none' : 'sentences'}
-          autoCorrect={type === 'email' || type === 'password' ? false : true}
-          secureTextEntry={isPassword && !shouldShowPassword}
+          autoCorrect={type === 'email' || isPassword ? false : true}
+          secureTextEntry={shouldHidePassword}
           editable={!disabled}
           multiline={multiline}
           numberOfLines={numberOfLines}
           returnKeyType={multiline ? 'default' : 'done'}
           blurOnSubmit={!multiline}
-          {...(Platform.OS === 'android' && { autoComplete: 'off' as any, importantForAutofill: 'no' as any })}
-          {...(Platform.OS === 'ios' && { textContentType: 'none' as any })}
+          autoComplete="off"
+          {...(Platform.OS === 'android'
+            ? {
+                importantForAutofill: 'noExcludeDescendants' as const,
+              }
+            : {})}
         />
-        {isPassword && (
-          <TouchableOpacity
-            onPress={() => setShowPassword(!showPassword)}
-            className="ml-2"
+
+        {isPassword ? (
+          <Pressable
+            onPress={() => setShowPassword((current) => !current)}
+            style={styles.passwordToggle}
           >
-            <Text className="text-primary text-sm font-medium">
-              {showPassword ? 'Hide' : 'Show'}
-            </Text>
-          </TouchableOpacity>
-        )}
+            <Text style={styles.passwordToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
+          </Pressable>
+        ) : null}
       </View>
-      {error && (
-        <Text className="text-error text-sm mt-1">{error}</Text>
-      )}
-      {helperText && !error && (
-        <Text className="text-text-secondary text-sm mt-1">{helperText}</Text>
-      )}
+
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {!error && helperText ? <Text style={styles.helperText}>{helperText}</Text> : null}
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  wrapper: {
+    marginBottom: 16,
+  },
+  label: {
+    marginBottom: 8,
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.text,
+  },
+  required: {
+    color: COLORS.error,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.background,
+  },
+  inputContainerError: {
+    borderColor: COLORS.error,
+  },
+  inputContainerDisabled: {
+    opacity: 0.5,
+  },
+  icon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 0,
+    fontSize: 16,
+    color: COLORS.text,
+  },
+  multilineInput: {
+    minHeight: 96,
+    textAlignVertical: 'top',
+  },
+  inputDisabled: {
+    color: COLORS.textSecondary,
+  },
+  passwordToggle: {
+    marginLeft: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  passwordToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  errorText: {
+    marginTop: 4,
+    fontSize: 14,
+    color: COLORS.error,
+  },
+  helperText: {
+    marginTop: 4,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+});
 
 export default Input;

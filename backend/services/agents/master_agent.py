@@ -20,6 +20,7 @@ from .doctor_comparison import compute_doctor_vs_model_diff
 from .explainability_agent import ExplainabilityAgent
 from .lifestyle_agent import LifestyleAgent
 from .medication_agent import MedicationAgent
+from .response_formatter import format_chatbot_response
 from .whatif_agent import WhatIfAgent
 
 try:
@@ -78,7 +79,8 @@ SYNTHESIZE_SYSTEM_PROMPT = """You are a clinical decision-support assistant. You
 1. Directly answers the clinician's question using the tool results.
 2. Is concise and clinically relevant.
 3. Does not add medical advice beyond what the tool results support.
-4. Ends with a brief reminder that the clinician remains the final decision-maker.
+4. When medication results include grounded evidence fields such as grounded_response, evidence_strength, retrieved_evidence, notes, or key warnings, explicitly mention the evidence strength and call out any weak-evidence limitation or major warning.
+5. Ends with a brief reminder that the clinician remains the final decision-maker.
 Do not output JSON; output only the reply text."""
 
 
@@ -288,8 +290,6 @@ class MasterAgent:
             final_message = _call_master_llm(SYNTHESIZE_SYSTEM_PROMPT, synthesize_user)
         except Exception as e:
             logger.warning("Master agent: synthesize LLM failed: %s; using fallback.", e)
-            # Fallback: brief summary from response_formatter
-            from .response_formatter import format_chatbot_response
             risk_out = agent_outputs.get("get_risk_explain") or agent_outputs.get("get_risk")
             final_message = format_chatbot_response(
                 mode="recommend",

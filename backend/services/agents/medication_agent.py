@@ -38,5 +38,9 @@ class MedicationAgent:
                 "warnings": result.get("warnings", []),
                 "confidence_score": result.get("confidence_score"),
                 "agent_trace": result.get("agent_trace", []),
+                "grounded_response": result.get("grounded_response"),
+                "retrieved_evidence": result.get("retrieved_evidence", []),
+                "evidence_strength": result.get("evidence_strength"),
+                "notes": result.get("notes"),
             },
         }
