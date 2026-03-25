@@ -20,6 +20,9 @@ from app.schemas.chatbot import (
     ChatbotResponse,
     ChatWithHistoryRequest,
     ChatWithHistoryResponse,
+    ConversationSummary,
+    ConversationTranscriptResponse,
+    PatientConversationListResponse,
     TranscriptMessage,
 )
 from app.schemas.enums import SenderType
@@ -76,6 +79,35 @@ def _audit_log(payload: ChatbotRequest, response: ChatbotResponse) -> None:
         pass
 
 
+def _serialize_message(message_doc: Dict[str, Any]) -> TranscriptMessage:
+    return TranscriptMessage(
+        id=str(message_doc["_id"]),
+        role="user" if message_doc.get("sender_type") == SenderType.provider else "assistant",
+        content=message_doc.get("body", ""),
+        created_at=message_doc.get("created_at").isoformat() if message_doc.get("created_at") else None,
+    )
+
+
+def _build_conversation_summary(db: Any, patient_id: str, conv_doc: Dict[str, Any]) -> ConversationSummary:
+    conv_oid = conv_doc["_id"]
+    messages = list(
+        db.messages.find({"conversation_id": conv_oid}).sort("created_at", 1)
+    )
+    preview = ""
+    if messages:
+        last_body = (messages[-1].get("body") or "").strip()
+        preview = last_body[:180]
+    return ConversationSummary(
+        conversation_id=str(conv_oid),
+        patient_id=patient_id,
+        subject=(conv_doc.get("subject") or "Clinical chat").strip() or "Clinical chat",
+        preview=preview,
+        message_count=len(messages),
+        created_at=conv_doc.get("created_at").isoformat() if conv_doc.get("created_at") else None,
+        updated_at=conv_doc.get("updated_at").isoformat() if conv_doc.get("updated_at") else None,
+    )
+
+
 @router.post("/clinical-assistant", response_model=ChatbotResponse)
 async def clinical_assistant(payload: ChatbotRequest):
     """
@@ -97,6 +129,45 @@ async def clinical_assistant(payload: ChatbotRequest):
         raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/patients/{patient_id}/conversations", response_model=PatientConversationListResponse)
+def list_patient_conversations(patient_id: str):
+    """
+    Return all saved chatbot sessions for a patient, newest first.
+    """
+    db = get_db()
+    patient_oid = _oid(patient_id)
+    conversations = list(
+        db.conversations.find({"patient_id": patient_oid}).sort("updated_at", -1)
+    )
+    return PatientConversationListResponse(
+        patient_id=patient_id,
+        conversations=[_build_conversation_summary(db, patient_id, conv) for conv in conversations],
+    )
+
+
+@router.get("/patients/{patient_id}/conversation", response_model=ConversationTranscriptResponse)
+def get_latest_patient_conversation(patient_id: str):
+    """
+    Return the latest conversation transcript for a patient.
+    """
+    db = get_db()
+    patient_oid = _oid(patient_id)
+    conv_doc = db.conversations.find_one(
+        {"patient_id": patient_oid},
+        sort=[("updated_at", -1)],
+    )
+    if not conv_doc:
+        return ConversationTranscriptResponse(patient_id=patient_id, conversation_id=None, transcript=[])
+    messages = list(
+        db.messages.find({"conversation_id": conv_doc["_id"]}).sort("created_at", 1)
+    )
+    return ConversationTranscriptResponse(
+        patient_id=patient_id,
+        conversation_id=str(conv_doc["_id"]),
+        transcript=[_serialize_message(m) for m in messages],
+    )
 
 
 @router.post("/chat", response_model=ChatWithHistoryResponse)
@@ -180,17 +251,22 @@ async def chat_with_history(payload: ChatWithHistoryRequest):
     }
     res_asst = db.messages.insert_one(assistant_msg)
     message_id_assistant = str(res_asst.inserted_id)
+    db.conversations.update_one(
+        {"_id": conv_oid},
+        {
+            "$set": {
+                "updated_at": datetime.now(timezone.utc),
+                "subject": (
+                    payload.subject
+                    or (payload.doctor_query[:80].strip() if payload.doctor_query else "Clinical chat")
+                    or "Clinical chat"
+                ),
+            }
+        },
+    )
 
     # Build transcript (all messages in order, including the two we just added)
-    transcript: List[TranscriptMessage] = []
-    for m in existing:
-        role = "user" if m.get("sender_type") == SenderType.provider else "assistant"
-        transcript.append(TranscriptMessage(
-            id=str(m["_id"]),
-            role=role,
-            content=m.get("body", ""),
-            created_at=m.get("created_at").isoformat() if m.get("created_at") else None,
-        ))
+    transcript: List[TranscriptMessage] = [_serialize_message(m) for m in existing]
     transcript.append(TranscriptMessage(
         id=message_id_user,
         role="user",
@@ -213,7 +289,7 @@ async def chat_with_history(payload: ChatWithHistoryRequest):
     )
 
 
-@router.get("/conversations/{conversation_id}/transcript", response_model=List[TranscriptMessage])
+@router.get("/conversations/{conversation_id}/transcript", response_model=ConversationTranscriptResponse)
 def get_conversation_transcript(conversation_id: str):
     """
     Return the full transcript (messages in order) for a conversation.
@@ -226,12 +302,8 @@ def get_conversation_transcript(conversation_id: str):
     messages = list(
         db.messages.find({"conversation_id": _oid(conversation_id)}).sort("created_at", 1)
     )
-    return [
-        TranscriptMessage(
-            id=str(m["_id"]),
-            role="user" if m.get("sender_type") == SenderType.provider else "assistant",
-            content=m.get("body", ""),
-            created_at=m.get("created_at").isoformat() if m.get("created_at") else None,
-        )
-        for m in messages
-    ]
+    return ConversationTranscriptResponse(
+        patient_id=str(conv_doc.get("patient_id")) if conv_doc.get("patient_id") else "",
+        conversation_id=conversation_id,
+        transcript=[_serialize_message(m) for m in messages],
+    )

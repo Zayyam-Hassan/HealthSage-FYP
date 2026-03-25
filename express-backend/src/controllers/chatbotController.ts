@@ -193,6 +193,50 @@ function buildMonitoringPlan(patient: any, latestRisk: any) {
   return uniqueLines(plan);
 }
 
+function buildPatientContextFallbackSummary(
+  patient: any,
+  clinicalSnapshot: string[],
+  reportContent: Record<string, unknown>,
+) {
+  const reportOverview =
+    typeof reportContent.overview === 'string' && reportContent.overview.trim()
+      ? reportContent.overview.trim()
+      : typeof reportContent.latest_risk_summary === 'string' && reportContent.latest_risk_summary.trim()
+        ? reportContent.latest_risk_summary.trim()
+        : null;
+
+  if (reportOverview) {
+    return reportOverview;
+  }
+
+  const highlights: string[] = [];
+  if (patient?.age) highlights.push(`age ${patient.age}`);
+  if (patient?.lab_tests?.hba1c !== undefined) highlights.push(`HbA1c ${patient.lab_tests.hba1c}%`);
+  if (patient?.lab_tests?.glucose !== undefined) highlights.push(`glucose ${patient.lab_tests.glucose} mg/dL`);
+  if (patient?.lab_tests?.fasting_glucose !== undefined) {
+    highlights.push(`fasting glucose ${patient.lab_tests.fasting_glucose} mg/dL`);
+  }
+  if (patient?.vital_signs?.bmi !== undefined) highlights.push(`BMI ${patient.vital_signs.bmi}`);
+  if (
+    patient?.vital_signs?.systolic_bp !== undefined &&
+    patient?.vital_signs?.diastolic_bp !== undefined
+  ) {
+    highlights.push(
+      `blood pressure ${patient.vital_signs.systolic_bp}/${patient.vital_signs.diastolic_bp} mmHg`,
+    );
+  }
+
+  if (highlights.length > 0) {
+    return `Latest clinical data loaded: ${highlights.slice(0, 5).join(', ')}.`;
+  }
+
+  if (clinicalSnapshot.length > 0) {
+    return `Latest patient context loaded: ${clinicalSnapshot.slice(0, 4).join(', ')}.`;
+  }
+
+  return 'Latest patient context loaded and ready for clinical questions.';
+}
+
 function buildNextSteps(lifestyle: string[], medication: string[], monitoring: string[]) {
   const steps = [
     lifestyle[0],
@@ -212,11 +256,44 @@ function mapTranscriptMessage(message: any) {
   };
 }
 
+async function buildConversationSummary(conversation: any, patientId: string) {
+  const conversationId =
+    typeof conversation?._id?.toString === 'function'
+      ? conversation._id.toString()
+      : String(conversation?._id ?? '');
+  const messages = await Message.find({ conversation_id: conversation._id })
+    .sort({ created_at: 1 })
+    .select({ body: 1, created_at: 1 })
+    .lean();
+
+  const lastMessage = messages[messages.length - 1];
+  const preview = typeof lastMessage?.body === 'string'
+    ? stripMarkdown(lastMessage.body).trim().slice(0, 180)
+    : '';
+
+  return {
+    conversation_id: conversationId,
+    patient_id: patientId,
+    subject: (conversation.subject ?? 'Clinical chat').trim() || 'Clinical chat',
+    preview,
+    message_count: messages.length,
+    created_at: conversation.created_at?.toISOString?.() ?? null,
+    updated_at: conversation.updated_at?.toISOString?.() ?? null,
+  };
+}
+
 async function touchConversation(conversationId: mongoose.Types.ObjectId) {
   await Conversation.updateOne(
     { _id: conversationId },
     { $set: { updated_at: new Date() } },
   );
+}
+
+function toConversationId(conversation: any): string {
+  if (typeof conversation?._id?.toString === 'function') {
+    return conversation._id.toString();
+  }
+  return String(conversation?._id ?? '');
 }
 
 async function findLatestConversation(patientId: mongoose.Types.ObjectId) {
@@ -278,7 +355,7 @@ async function buildExpressPatientContext(patientId: string) {
     ? `${latestRisk.predicted_label === 1 ? 'Higher diabetes risk' : 'Lower diabetes risk'}${
         latestRisk.probability ? ` (${Math.round(latestRisk.probability * 100)}%)` : ''
       }`
-    : 'No saved prediction is available yet.';
+    : buildPatientContextFallbackSummary(patient, clinicalSnapshot, reportContent);
 
   const lifestyleSuggestions = uniqueLines([
     ...toSentenceList(reportContent.lifestyle_suggestions),
@@ -465,6 +542,7 @@ export async function chatWithHistory(req: Request, res: Response): Promise<void
     mode?: string;
     conversation_id?: string | null;
     subject?: string;
+    start_new?: boolean;
   };
 
   if (!body.patient_id || !body.doctor_query) {
@@ -490,7 +568,7 @@ export async function chatWithHistory(req: Request, res: Response): Promise<void
       return;
     }
 
-    let conversationId = body.conversation_id ?? null;
+    let conversationId = body.start_new ? null : body.conversation_id ?? null;
     let convDoc: any | null = null;
     if (conversationId) {
       if (!mongoose.isValidObjectId(conversationId)) {
@@ -507,14 +585,11 @@ export async function chatWithHistory(req: Request, res: Response): Promise<void
         return;
       }
     } else {
-      convDoc = await findLatestConversation(patient._id as mongoose.Types.ObjectId);
-      if (!convDoc) {
-        convDoc = await Conversation.create({
-          patient_id: patient._id,
-          subject,
-        });
-      }
-      conversationId = convDoc.id;
+      convDoc = await Conversation.create({
+        patient_id: patient._id,
+        subject,
+      });
+      conversationId = toConversationId(convDoc);
     }
     const resolvedConversationId = conversationId as string;
 
@@ -657,7 +732,7 @@ export async function getLatestConversationForPatient(
       .lean();
 
     res.json({
-      conversation_id: conversation.id,
+      conversation_id: toConversationId(conversation),
       patient_id: patient.id,
       transcript: messages.map(mapTranscriptMessage),
     });
@@ -669,11 +744,57 @@ export async function getLatestConversationForPatient(
   }
 }
 
+export async function listPatientConversations(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const { patientId } = req.params;
+  if (!patientId) {
+    res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: 'patientId is required' });
+    return;
+  }
+
+  try {
+    if (req.user?.role !== 'doctor') {
+      res.status(StatusCodes.FORBIDDEN).json({
+        message: 'Only doctors can use the assistant',
+      });
+      return;
+    }
+
+    const patient = await getAccessiblePatient(req, patientId);
+    if (!patient) {
+      res.status(StatusCodes.FORBIDDEN).json({ message: 'Forbidden' });
+      return;
+    }
+
+    const conversations = await Conversation.find({ patient_id: patient._id })
+      .sort({ updated_at: -1, created_at: -1 })
+      .lean();
+
+    const summaries = await Promise.all(
+      conversations.map((conversation) => buildConversationSummary(conversation, patient.id)),
+    );
+
+    res.json({
+      patient_id: patient.id,
+      conversations: summaries,
+    });
+  } catch (err: any) {
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: 'Failed to load conversations',
+      detail: err?.message,
+    });
+  }
+}
+
 export async function getConversationTranscript(
   req: Request,
   res: Response,
 ): Promise<void> {
   const { conversationId } = req.params;
+  const requestedPatientId =
+    typeof req.query.patient_id === 'string' ? req.query.patient_id : undefined;
   if (!conversationId || !mongoose.isValidObjectId(conversationId)) {
     res.status(StatusCodes.NOT_FOUND).json({ message: 'Conversation not found' });
     return;
@@ -693,8 +814,14 @@ export async function getConversationTranscript(
       return;
     }
 
-    const patient = await getAccessiblePatient(req, conversation.patient_id?.toString() ?? '');
+    const patientLookupId = requestedPatientId || conversation.patient_id?.toString() || '';
+    const patient = await getAccessiblePatient(req, patientLookupId);
     if (!patient) {
+      res.status(StatusCodes.FORBIDDEN).json({ message: 'Forbidden' });
+      return;
+    }
+
+    if (conversation.patient_id?.toString() && conversation.patient_id.toString() !== patient.id) {
       res.status(StatusCodes.FORBIDDEN).json({ message: 'Forbidden' });
       return;
     }
@@ -706,7 +833,7 @@ export async function getConversationTranscript(
       .lean();
 
     res.json({
-      conversation_id: conversation.id,
+      conversation_id: toConversationId(conversation),
       patient_id: patient.id,
       transcript: messages.map((message) => ({
         id: message._id.toString(),

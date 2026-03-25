@@ -48,6 +48,14 @@ class ChatbotResponse(BaseModel):
         description="risk, lifestyle, medication, explainability, comparison, whatif as applicable"
     )
     final_message: str
+    detailed_message: Optional[str] = Field(
+        default=None,
+        description="Expanded clinician-facing response when lifestyle or medication guidance is returned"
+    )
+    summary_message: Optional[str] = Field(
+        default=None,
+        description="Optional compact summary retained for debugging or compact-card use"
+    )
     doctor_note: str = Field(default="The doctor remains the final decision-maker.")
 
 
@@ -68,6 +76,30 @@ class TranscriptMessage(BaseModel):
     role: str = Field(..., description="user | assistant")
     content: str = ""
     created_at: Optional[str] = None
+
+
+class ConversationSummary(BaseModel):
+    """Conversation list item for chatbot session picker."""
+    conversation_id: str
+    patient_id: str
+    subject: str = "Clinical chat"
+    preview: str = ""
+    message_count: int = 0
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class PatientConversationListResponse(BaseModel):
+    """All conversations for one patient, newest first."""
+    patient_id: str
+    conversations: List[ConversationSummary] = Field(default_factory=list)
+
+
+class ConversationTranscriptResponse(BaseModel):
+    """Transcript response for one conversation or latest conversation."""
+    conversation_id: Optional[str] = None
+    patient_id: str
+    transcript: List[TranscriptMessage] = Field(default_factory=list)
 
 
 class ChatWithHistoryResponse(BaseModel):

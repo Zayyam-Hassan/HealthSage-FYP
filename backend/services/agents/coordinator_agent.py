@@ -14,7 +14,7 @@ from .doctor_comparison import compute_doctor_vs_model_diff
 from .explainability_agent import ExplainabilityAgent
 from .lifestyle_agent import LifestyleAgent
 from .medication_agent import MedicationAgent
-from .response_formatter import format_chatbot_response
+from .response_formatter import build_chatbot_detail_bundle
 from .whatif_agent import WhatIfAgent
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ class CoordinatorAgent:
                 "medication_change": expl.get("medication_change"),
                 "safety_change": expl.get("safety_change"),
             }
-            final_message = format_chatbot_response(
+            message_bundle = build_chatbot_detail_bundle(
                 mode=mode,
                 whatif_output=whatif_output,
                 risk_output=whatif_output.get("original_outputs", {}).get("risk"),
@@ -89,7 +89,9 @@ class CoordinatorAgent:
                     "explainability": explainability_output,
                     "whatif": whatif_output,
                 },
-                final_message=final_message,
+                final_message=message_bundle["final_message"] or "",
+                detailed_message=message_bundle.get("detailed_message"),
+                summary_message=message_bundle.get("summary_message"),
                 doctor_note="The doctor remains the final decision-maker.",
             )
 
@@ -118,7 +120,7 @@ class CoordinatorAgent:
                 explainability_output = exp_payload.model_dump() if isinstance(exp_payload, ExplainabilityPayload) else exp_payload
             except Exception as e:
                 logger.warning("Coordinator explain: lifestyle/medication failed: %s", e)
-            final_message = format_chatbot_response(
+            message_bundle = build_chatbot_detail_bundle(
                 mode=mode,
                 risk_output=risk_output,
                 lifestyle_output=lifestyle_output,
@@ -135,7 +137,9 @@ class CoordinatorAgent:
                     "medication": medication_output,
                     "explainability": explainability_output,
                 },
-                final_message=final_message,
+                final_message=message_bundle["final_message"] or "",
+                detailed_message=message_bundle.get("detailed_message"),
+                summary_message=message_bundle.get("summary_message"),
                 doctor_note="The doctor remains the final decision-maker.",
             )
 
@@ -153,7 +157,7 @@ class CoordinatorAgent:
                 patient_id, risk_output, lifestyle_output, medication_output
             )
             explainability_output = explainability_payload.model_dump() if hasattr(explainability_payload, "model_dump") else explainability_payload
-            final_message = format_chatbot_response(
+            message_bundle = build_chatbot_detail_bundle(
                 mode=mode,
                 risk_output=risk_output,
                 lifestyle_output=lifestyle_output,
@@ -172,7 +176,9 @@ class CoordinatorAgent:
                     "explainability": explainability_output,
                     "comparison": comparison_output,
                 },
-                final_message=final_message,
+                final_message=message_bundle["final_message"] or "",
+                detailed_message=message_bundle.get("detailed_message"),
+                summary_message=message_bundle.get("summary_message"),
                 doctor_note="The doctor remains the final decision-maker.",
             )
 
@@ -183,7 +189,7 @@ class CoordinatorAgent:
             patient_id, risk_output, lifestyle_output, medication_output
         )
         explainability_output = explainability_payload.model_dump() if hasattr(explainability_payload, "model_dump") else explainability_payload
-        final_message = format_chatbot_response(
+        message_bundle = build_chatbot_detail_bundle(
             mode="recommend",
             risk_output=risk_output,
             lifestyle_output=lifestyle_output,
@@ -200,6 +206,8 @@ class CoordinatorAgent:
                 "medication": medication_output,
                 "explainability": explainability_output,
             },
-            final_message=final_message,
+            final_message=message_bundle["final_message"] or "",
+            detailed_message=message_bundle.get("detailed_message"),
+            summary_message=message_bundle.get("summary_message"),
             doctor_note="The doctor remains the final decision-maker.",
         )

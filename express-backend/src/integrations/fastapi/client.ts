@@ -13,7 +13,7 @@ const recommendationClient: AxiosInstance = axios.create({
 
 const chatbotClient: AxiosInstance = axios.create({
   baseURL: env.fastApiBaseUrl,
-  timeout: 45000,
+  timeout: 120000,
 });
 
 export async function callRiskExplain(patientId: string) {

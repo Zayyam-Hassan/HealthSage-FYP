@@ -20,7 +20,7 @@ from .doctor_comparison import compute_doctor_vs_model_diff
 from .explainability_agent import ExplainabilityAgent
 from .lifestyle_agent import LifestyleAgent
 from .medication_agent import MedicationAgent
-from .response_formatter import format_chatbot_response
+from .response_formatter import build_chatbot_detail_bundle, format_chatbot_summary
 from .whatif_agent import WhatIfAgent
 
 try:
@@ -75,13 +75,33 @@ If you need to call tools, set "tools" to a list of tool names (use exactly the 
 If you do NOT need to call any tool (greeting, clarification, or off-topic), set "tools" to [] and set "reply_without_tools" to your short reply string.
 """
 
-SYNTHESIZE_SYSTEM_PROMPT = """You are a clinical decision-support assistant. You will be given the clinician's question and the raw results from the tools that were run (risk, lifestyle, medication, explanations, etc.). Your job is to write a single, clear, conversational reply that:
-1. Directly answers the clinician's question using the tool results.
-2. Is concise and clinically relevant.
-3. Does not add medical advice beyond what the tool results support.
-4. When medication results include grounded evidence fields such as grounded_response, evidence_strength, retrieved_evidence, notes, or key warnings, explicitly mention the evidence strength and call out any weak-evidence limitation or major warning.
-5. Ends with a brief reminder that the clinician remains the final decision-maker.
-Do not output JSON; output only the reply text."""
+SYNTHESIZE_SYSTEM_PROMPT = """You are a clinical decision-support assistant. You will be given the clinician's question and the raw results from the tools that were run (risk, lifestyle, medication, explanations, etc.). Your job is to write a single, clear, clinically readable reply that:
+1. Directly answers the clinician's question using only the tool results.
+2. Does not add medical advice beyond what the tool results support.
+3. If the tool results include lifestyle recommendations, do NOT give a short summary. Provide a detailed response with readable section labels and bullet points covering:
+   - patient context relevant to lifestyle advice
+   - why the lifestyle recommendations are being made
+   - diet guidance
+   - physical activity guidance
+   - sleep guidance
+   - stress, routine, or behavioral guidance
+   - monitoring or follow-up advice
+   - cautions or limitations
+   - clinician review note
+4. If the tool results include medication recommendations, do NOT give a short summary. Provide a detailed response with readable section labels and bullet points covering:
+   - patient context relevant to medication choice
+   - why the medication matches the patient
+   - supporting drug evidence
+   - supporting guideline evidence when available
+   - key warnings
+   - interaction notes
+   - contraindication or caution notes
+   - why some options were deprioritized or not selected as primary
+   - next-step note requiring clinician review
+5. For medication and lifestyle guidance, the main reply must be detailed and explanatory rather than compressed into a single paragraph.
+6. For other flows without lifestyle or medication guidance, you may remain concise.
+7. Use clean plain text with section labels and bullets. Do not output JSON.
+8. End with a brief reminder that the clinician remains the final decision-maker."""
 
 
 def _call_master_llm(system: str, user: str) -> str:
@@ -238,11 +258,14 @@ class MasterAgent:
             raw_decision = _call_master_llm(MASTER_SYSTEM_PROMPT, user_text)
         except Exception as e:
             logger.exception("Master agent: LLM call failed: %s", e)
+            failure_message = "I couldn't process your request (LLM unavailable). Please try again or use a specific mode (Recommend, Explain, etc.)."
             return ChatbotResponse(
                 mode="master",
                 patient_id=patient_id,
                 agent_outputs={},
-                final_message="I couldn't process your request (LLM unavailable). Please try again or use a specific mode (Recommend, Explain, etc.).",
+                final_message=failure_message,
+                detailed_message=None,
+                summary_message=failure_message,
                 doctor_note="The doctor remains the final decision-maker.",
             )
 
@@ -260,6 +283,8 @@ class MasterAgent:
                 patient_id=patient_id,
                 agent_outputs={},
                 final_message=reply,
+                detailed_message=None,
+                summary_message=reply,
                 doctor_note="The doctor remains the final decision-maker.",
             )
 
@@ -291,7 +316,7 @@ class MasterAgent:
         except Exception as e:
             logger.warning("Master agent: synthesize LLM failed: %s; using fallback.", e)
             risk_out = agent_outputs.get("get_risk_explain") or agent_outputs.get("get_risk")
-            final_message = format_chatbot_response(
+            message_bundle = build_chatbot_detail_bundle(
                 mode="recommend",
                 risk_output=risk_out,
                 lifestyle_output=agent_outputs.get("get_lifestyle"),
@@ -301,11 +326,30 @@ class MasterAgent:
                 whatif_output=agent_outputs.get("what_if"),
                 user_query=doctor_query,
             )
+            final_message = message_bundle["final_message"] or ""
+        else:
+            risk_out = agent_outputs.get("get_risk_explain") or agent_outputs.get("get_risk")
+            message_bundle = {
+                "final_message": final_message,
+                "detailed_message": final_message if (agent_outputs.get("get_lifestyle") or agent_outputs.get("get_medication")) else None,
+                "summary_message": format_chatbot_summary(
+                    mode="master",
+                    risk_output=risk_out,
+                    lifestyle_output=agent_outputs.get("get_lifestyle"),
+                    medication_output=agent_outputs.get("get_medication"),
+                    explainability_output=agent_outputs.get("get_explainability"),
+                    comparison_output=agent_outputs.get("compare"),
+                    whatif_output=agent_outputs.get("what_if"),
+                    user_query=doctor_query,
+                ),
+            }
 
         return ChatbotResponse(
             mode="master",
             patient_id=patient_id,
             agent_outputs=agent_outputs,
-            final_message=final_message,
+            final_message=message_bundle["final_message"] or final_message,
+            detailed_message=message_bundle.get("detailed_message"),
+            summary_message=message_bundle.get("summary_message"),
             doctor_note="The doctor remains the final decision-maker.",
         )

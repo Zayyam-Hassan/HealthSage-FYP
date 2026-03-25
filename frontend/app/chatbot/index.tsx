@@ -1,23 +1,25 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  Text,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 import * as ExpoLinking from 'expo-linking';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppDialog from '@/components/AppDialog';
 import Header from '@/components/Header';
-import Card from '@/components/Card';
+import { colors } from '@/constants/colors';
 import { authService, type UserRole } from '@/services/auth';
-import { chatbotService } from '@/services/chatbot';
+import { chatbotService, type ConversationSummary } from '@/services/chatbot';
 import { doctorsService } from '@/services/doctors';
 
 interface Message {
@@ -144,7 +146,10 @@ function parseMarkdownBlocks(text: string): MarkdownBlock[] {
   return blocks;
 }
 
-function renderInlineMarkdown(text: string): React.ReactNode[] {
+function renderInlineMarkdown(
+  text: string,
+  baseTextStyle: object = styles.markdownParagraph,
+): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   const pattern =
     /(\[([^\]]+)\]\(([^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|__([^_]+)__|\*([^*\n]+)\*|_([^_\n]+)_)/g;
@@ -154,7 +159,7 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
   while ((match = pattern.exec(text)) !== null) {
     if (match.index > lastIndex) {
       nodes.push(
-        <Text key={`text-${match.index}`} style={styles.markdownParagraph}>
+        <Text key={`text-${match.index}`} style={baseTextStyle}>
           {text.slice(lastIndex, match.index)}
         </Text>,
       );
@@ -199,7 +204,7 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
 
   if (lastIndex < text.length) {
     nodes.push(
-      <Text key={`tail-${lastIndex}`} style={styles.markdownParagraph}>
+      <Text key={`tail-${lastIndex}`} style={baseTextStyle}>
         {text.slice(lastIndex)}
       </Text>,
     );
@@ -223,7 +228,7 @@ function BotMarkdown({ text }: { text: string }) {
                 : styles.markdownHeadingSmall;
           return (
             <View key={`heading-${index}`} style={styles.markdownBlock}>
-              <Text style={headingStyle}>{block.content}</Text>
+              <Text style={headingStyle}>{renderInlineMarkdown(block.content, headingStyle)}</Text>
             </View>
           );
         }
@@ -233,7 +238,7 @@ function BotMarkdown({ text }: { text: string }) {
             <View key={`bullets-${index}`} style={styles.markdownBlock}>
               {block.items.map((item, itemIndex) => (
                 <View key={`bullet-${itemIndex}`} style={styles.listRow}>
-                  <Text style={styles.listBullet}>•</Text>
+                  <Text style={styles.listBullet}>-</Text>
                   <Text style={styles.markdownParagraph}>{renderInlineMarkdown(item)}</Text>
                 </View>
               ))}
@@ -257,7 +262,9 @@ function BotMarkdown({ text }: { text: string }) {
         if (block.type === 'quote') {
           return (
             <View key={`quote-${index}`} style={[styles.markdownBlock, styles.quoteBlock]}>
-              <Text style={styles.quoteText}>{renderInlineMarkdown(block.content)}</Text>
+              <Text style={styles.quoteText}>
+                {renderInlineMarkdown(block.content, styles.quoteText)}
+              </Text>
             </View>
           );
         }
@@ -289,15 +296,42 @@ function buildIntroMessage(patientLabel?: string): Message {
   return {
     id: 'intro',
     text: patientLabel
-      ? `Welcome back. I have loaded the latest assistant thread for ${patientLabel}. Ask about risk, lifestyle, medication, or generate a patient report when you are ready.`
-      : "Hello! I'm your HealthSage assistant. Select one of your patients and ask a focused clinical question.",
+      ? `Ready for a new conversation for ${patientLabel}. Use New chat to start fresh, or open a previous session from the sidebar to continue earlier guidance.`
+      : 'Hello. Select a patient to open a clinical conversation.',
     sender: 'bot',
     timestamp: new Date(),
   };
 }
 
+function mapTranscriptToMessages(
+  transcript: { id?: string; role: string; content: string; created_at?: string }[],
+): Message[] {
+  return transcript.map((message, index) => ({
+    id: message.id || `${message.role}-${index}`,
+    text: message.content,
+    sender: message.role === 'user' ? 'user' : 'bot',
+    timestamp: message.created_at ? new Date(message.created_at) : new Date(),
+  }));
+}
+
+function formatSessionTime(value?: string) {
+  if (!value) return 'No activity yet';
+  return new Date(value).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function isValidConversationId(value?: string | null): value is string {
+  return typeof value === 'string' && /^[a-fA-F0-9]{24}$/.test(value);
+}
+
 export default function ChatbotScreen() {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 1024;
   const [role, setRole] = useState<UserRole | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -305,13 +339,26 @@ export default function ChatbotScreen() {
   const [patientOptions, setPatientOptions] = useState<{ id: string; label: string }[]>([]);
   const [patientContext, setPatientContext] = useState<Record<string, unknown> | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationSessions, setConversationSessions] = useState<ConversationSummary[]>([]);
+  const [startFreshConversation, setStartFreshConversation] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [dialog, setDialog] = useState<{
     visible: boolean;
     title: string;
     message: string;
   }>({ visible: false, title: '', message: '' });
-  const flatListRef = useRef<FlatList>(null);
+  const flatListRef = useRef<FlatList<Message>>(null);
+
+  const selectedPatient = useMemo(
+    () => patientOptions.find((option) => option.id === patientId) ?? null,
+    [patientId, patientOptions],
+  );
+
+  const activeConversation = useMemo(
+    () => conversationSessions.find((session) => session.conversation_id === conversationId) ?? null,
+    [conversationId, conversationSessions],
+  );
 
   useEffect(() => {
     (async () => {
@@ -323,7 +370,7 @@ export default function ChatbotScreen() {
         if (currentRole !== 'doctor') {
           setMessages([
             {
-              id: '1',
+              id: 'doctor-only',
               text: 'The clinical assistant is available only to doctors.',
               sender: 'bot',
               timestamp: new Date(),
@@ -340,12 +387,12 @@ export default function ChatbotScreen() {
         setPatientOptions(options);
         setPatientId(options[0]?.id ?? null);
         setMessages(options[0] ? [buildIntroMessage(options[0].label)] : [buildIntroMessage()]);
-      } catch (e) {
-        console.error('Failed to load patients for chatbot:', e);
+      } catch (error) {
+        console.error('Failed to load patients for chatbot:', error);
         setMessages([
           {
-            id: '1',
-            text: 'The assistant could not load the patient context yet. Please refresh and try again.',
+            id: 'load-failed',
+            text: 'The assistant could not load your patient list yet. Please refresh and try again.',
             sender: 'bot',
             timestamp: new Date(),
           },
@@ -358,59 +405,62 @@ export default function ChatbotScreen() {
     if (!patientId) {
       setPatientContext(null);
       setConversationId(null);
+      setConversationSessions([]);
       return;
     }
 
-    const selectedPatient = patientOptions.find((option) => option.id === patientId);
-
     (async () => {
       try {
-        const [context, latestConversation] = await Promise.all([
+        const [context, conversationList] = await Promise.all([
           chatbotService.getPatientContext(patientId),
-          chatbotService.getLatestConversation(patientId),
+          chatbotService.listPatientConversations(patientId),
         ]);
 
         setPatientContext(context);
-        setConversationId(latestConversation.conversation_id ?? null);
-
-        if ((latestConversation.transcript ?? []).length > 0) {
-          setMessages(
-            latestConversation.transcript.map((message, index) => ({
-              id: message.id || `${message.role}-${index}`,
-              text: message.content,
-              sender: message.role === 'user' ? 'user' : 'bot',
-              timestamp: message.created_at ? new Date(message.created_at) : new Date(),
-            })),
-          );
-          return;
-        }
-
+        setConversationSessions(
+          (conversationList.conversations ?? []).filter((session) =>
+            isValidConversationId(session.conversation_id),
+          ),
+        );
+        setConversationId(null);
+        setStartFreshConversation(true);
         setMessages([buildIntroMessage(selectedPatient?.label)]);
       } catch (error) {
         console.error('Failed to load patient context:', error);
         setPatientContext(null);
         setConversationId(null);
+        setConversationSessions([]);
         setMessages([
           {
-            id: 'load-error',
-            text: 'The assistant could not load the latest thread for this patient yet. You can still start a new question below.',
+            id: 'thread-load-failed',
+            text: 'The assistant could not load saved sessions for this patient yet. You can still start a new chat below.',
             sender: 'bot',
             timestamp: new Date(),
           },
         ]);
       }
     })();
-  }, [patientId, patientOptions]);
+  }, [patientId, selectedPatient?.label]);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    }
+    if (messages.length === 0) return;
+    const timeout = setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 120);
+    return () => clearTimeout(timeout);
   }, [messages]);
+
+  const refreshConversationSessions = async (nextPatientId: string) => {
+    const sessions = await chatbotService.listPatientConversations(nextPatientId);
+    setConversationSessions(
+      (sessions.conversations ?? []).filter((session) => isValidConversationId(session.conversation_id)),
+    );
+  };
 
   const handleSend = async () => {
     const text = inputText.trim();
     if (!text) return;
+
     if (role !== 'doctor') {
       setDialog({
         visible: true,
@@ -419,6 +469,7 @@ export default function ChatbotScreen() {
       });
       return;
     }
+
     if (!patientId) {
       setDialog({
         visible: true,
@@ -428,37 +479,52 @@ export default function ChatbotScreen() {
       return;
     }
 
-    const userMessage: Message = {
+    const pendingUserMessage: Message = {
       id: `u-${Date.now()}`,
       text,
       sender: 'user',
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => [...prev, pendingUserMessage]);
     setInputText('');
     setSending(true);
 
     try {
+      const subject =
+        conversationId === null
+          ? text.split(/\s+/).slice(0, 8).join(' ').trim() || 'Clinical chat'
+          : undefined;
       const response = await chatbotService.chat({
         patient_id: patientId,
         doctor_query: text,
         mode: 'master',
-        conversation_id: conversationId ?? undefined,
+        conversation_id: startFreshConversation ? undefined : conversationId ?? undefined,
+        subject,
+        start_new: startFreshConversation,
       });
+
       if (response.conversation_id) {
         setConversationId(response.conversation_id);
+        setStartFreshConversation(false);
       }
 
-      const botText = response.response?.final_message ?? 'No response from assistant.';
-      const botMessage: Message = {
-        id: `b-${Date.now()}`,
-        text: botText,
-        sender: 'bot',
-        timestamp: new Date(),
-      };
+      if ((response.transcript ?? []).length > 0) {
+        setMessages(mapTranscriptToMessages(response.transcript ?? []));
+      } else {
+        const botText = response.response?.final_message ?? 'No response from assistant.';
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `b-${Date.now()}`,
+            text: botText,
+            sender: 'bot',
+            timestamp: new Date(),
+          },
+        ]);
+      }
 
-      setMessages((prev) => [...prev, botMessage]);
+      await refreshConversationSessions(patientId);
 
       if (response.response?.report_created) {
         setDialog({
@@ -483,188 +549,713 @@ export default function ChatbotScreen() {
     }
   };
 
+  const handleNewChat = () => {
+    setConversationId(null);
+    setStartFreshConversation(true);
+    setMessages([buildIntroMessage(selectedPatient?.label)]);
+    setInputText('');
+    setSidebarVisible(false);
+  };
+
+  const handleOpenConversation = async (session: ConversationSummary) => {
+    if (!isValidConversationId(session.conversation_id)) {
+      setDialog({
+        visible: true,
+        title: 'Conversation unavailable',
+        message: 'This saved chat session has an invalid id. Refresh the page and try again.',
+      });
+      return;
+    }
+
+    try {
+      const transcript = await chatbotService.getConversationTranscript(
+        session.conversation_id,
+        session.patient_id || patientId || undefined,
+      );
+      setConversationId(session.conversation_id);
+      setStartFreshConversation(false);
+      setMessages(mapTranscriptToMessages(transcript.transcript ?? []));
+      setSidebarVisible(false);
+    } catch (error: any) {
+      console.error('Failed to open conversation:', error);
+      setDialog({
+        visible: true,
+        title: 'Conversation unavailable',
+        message: error?.message || 'This chat session could not be loaded right now.',
+      });
+    }
+  };
+
+  const handleContinueLatestConversation = async () => {
+    if (conversationSessions.length === 0) {
+      return;
+    }
+    await handleOpenConversation(conversationSessions[0]);
+  };
+
   const renderMessage = ({ item }: { item: Message }) => {
     const isUser = item.sender === 'user';
     return (
-      <View className={`mb-4 px-4 ${isUser ? 'items-end' : 'items-center'}`}>
-        <View className={`flex-row items-start ${isUser ? 'max-w-[82%]' : 'w-full'}`}>
-          {!isUser && (
-            <View className="w-10 h-10 bg-primary rounded-full items-center justify-center mr-3 mt-1 shadow-md">
-              <Text className="text-white text-xs font-bold">HS</Text>
-            </View>
-          )}
-          <Card
-            className={`${
-              isUser
-                ? 'bg-primary rounded-[24px] rounded-tr-sm shadow-md'
-                : 'flex-1 bg-white rounded-[24px] border border-border/50'
-            }`}
-            padding={isUser ? 'sm' : 'md'}
-          >
-            {isUser ? (
-              <Text className="text-sm leading-5 text-white">{item.text}</Text>
-            ) : (
-              <BotMarkdown text={item.text} />
-            )}
-          </Card>
-          {isUser && (
-            <View className="w-10 h-10 bg-primary/20 rounded-full items-center justify-center ml-3 mt-1 border-2 border-primary/30">
-              <Text className="text-primary text-xs font-bold">You</Text>
-            </View>
+      <View
+        style={[
+          styles.messageRow,
+          isUser ? styles.messageRowUser : styles.messageRowBot,
+        ]}
+      >
+        <View
+          style={[
+            styles.messageBubble,
+            isUser ? styles.userBubble : styles.botBubble,
+            !isUser && isDesktop ? styles.botBubbleDesktop : null,
+          ]}
+        >
+          {isUser ? (
+            <Text style={styles.userMessageText}>{item.text}</Text>
+          ) : (
+            <BotMarkdown text={item.text} />
           )}
         </View>
-        <Text className="text-xs text-text-tertiary mt-1 px-2">
+        <Text style={[styles.timestamp, isUser ? styles.timestampUser : styles.timestampBot]}>
           {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
       </View>
     );
   };
 
+  const sidebarContent = (
+    <View style={styles.sidebarPanel}>
+      <View style={styles.sidebarHeader}>
+        <Text style={styles.sidebarEyebrow}>HealthSage Assistant</Text>
+        <Text style={styles.sidebarTitle}>Chats</Text>
+      </View>
+
+      <TouchableOpacity style={styles.newChatButton} activeOpacity={0.85} onPress={handleNewChat}>
+        <Text style={styles.newChatButtonText}>+ New chat</Text>
+      </TouchableOpacity>
+
+      {conversationSessions.length > 0 ? (
+        <TouchableOpacity
+          style={styles.continueLatestButton}
+          activeOpacity={0.85}
+          onPress={handleContinueLatestConversation}
+        >
+          <Text style={styles.continueLatestLabel}>Continue latest</Text>
+          <Text style={styles.continueLatestTitle} numberOfLines={1}>
+            {conversationSessions[0]?.subject || 'Clinical chat'}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+
+      <Text style={styles.sidebarSectionLabel}>Patients</Text>
+      <ScrollView
+        style={styles.patientList}
+        contentContainerStyle={styles.patientListContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {patientOptions.map((patient) => {
+          const isActive = patient.id === patientId;
+          return (
+            <TouchableOpacity
+              key={patient.id}
+              style={[styles.patientChip, isActive ? styles.patientChipActive : null]}
+              activeOpacity={0.85}
+              onPress={() => {
+                setPatientId(patient.id);
+                setSidebarVisible(false);
+              }}
+            >
+              <Text style={[styles.patientChipText, isActive ? styles.patientChipTextActive : null]}>
+                {patient.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      <View style={styles.sessionHeaderRow}>
+        <Text style={styles.sidebarSectionLabel}>Recent sessions</Text>
+        <Text style={styles.sessionCountText}>{conversationSessions.length}</Text>
+      </View>
+
+      <ScrollView style={styles.sessionList} showsVerticalScrollIndicator={false}>
+        {conversationSessions.length === 0 ? (
+          <View style={styles.emptySessionCard}>
+            <Text style={styles.emptySessionText}>
+              No saved sessions yet for this patient.
+            </Text>
+          </View>
+        ) : (
+          conversationSessions.map((session) => {
+            const isActive = session.conversation_id === conversationId;
+            return (
+              <TouchableOpacity
+                key={session.conversation_id}
+                style={[styles.sessionCard, isActive ? styles.sessionCardActive : null]}
+                activeOpacity={0.85}
+                onPress={() => handleOpenConversation(session)}
+              >
+                <Text style={[styles.sessionTitle, isActive ? styles.sessionTitleActive : null]} numberOfLines={1}>
+                  {session.subject || 'Clinical chat'}
+                </Text>
+                <Text style={styles.sessionPreview} numberOfLines={2}>
+                  {session.preview || 'Open this session to continue the thread.'}
+                </Text>
+                <Text style={styles.sessionMeta}>
+                  {formatSessionTime(session.updated_at || session.created_at)}
+                </Text>
+                <Text style={styles.sessionOpenHint}>Open chat</Text>
+              </TouchableOpacity>
+            );
+          })
+        )}
+      </ScrollView>
+    </View>
+  );
+
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <AppDialog
         visible={dialog.visible}
         title={dialog.title}
         message={dialog.message}
         onClose={() => setDialog({ visible: false, title: '', message: '' })}
       />
+
       <Header title="HealthSage Assistant" showBack />
-      {patientOptions.length > 0 && (
-        <View className="px-4 py-2 border-b border-border">
-          <Text className="text-xs text-text-secondary mb-1">
-            {role === 'doctor' ? 'Patient' : 'Your record'}
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {patientOptions.slice(0, 5).map((p) => (
-              <TouchableOpacity
-                key={p.id}
-                onPress={() => setPatientId(p.id)}
-                className={`px-3 py-1.5 rounded-full ${
-                  patientId === p.id ? 'bg-primary' : 'bg-bg-secondary border border-border'
-                }`}
-              >
-                <Text className={`text-sm ${patientId === p.id ? 'text-white' : 'text-text'}`}>
-                  {p.label}
+
+      <View style={styles.shell}>
+        {isDesktop ? <View style={styles.sidebarDesktop}>{sidebarContent}</View> : null}
+
+        <View style={styles.mainPanel}>
+          <View style={styles.mainHeader}>
+            <View style={styles.mainHeaderLeft}>
+              {!isDesktop ? (
+                <TouchableOpacity
+                  style={styles.mobileSidebarButton}
+                  activeOpacity={0.85}
+                  onPress={() => setSidebarVisible(true)}
+                >
+                  <Text style={styles.mobileSidebarButtonText}>Chats</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              <View>
+                <Text style={styles.threadTitle}>
+                  {activeConversation?.subject || 'New clinical chat'}
                 </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
-      {patientContext ? (
-        <View className="px-4 pt-3">
-          <Card className="border border-primary/20 bg-primary/5">
-            <Text className="text-sm font-semibold text-text mb-1">
-              Selected patient context
-            </Text>
-            <Text className="text-sm text-text-secondary leading-5">
-              {(patientContext.risk_summary as string) ||
-                (patientContext.latest_risk_summary as string) ||
-                'The assistant will use the latest saved health profile and prediction data.'}
-            </Text>
-          </Card>
-        </View>
-      ) : null}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderMessage}
-          contentContainerStyle={{
-            paddingVertical: 16,
-            paddingBottom: 120,
-            paddingTop: 8,
-          }}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        />
-        <View
-          className="absolute left-0 right-0 bg-background border-t border-border px-4 pt-3"
-          style={{ paddingBottom: Math.max(insets.bottom, 12) }}
-        >
-          <View className="flex-row items-end">
-            <View className="flex-1 bg-white rounded-[24px] px-4 py-3 mr-3 border border-border shadow-sm">
-              <TextInput
-                className="text-base text-text"
-                placeholder="Ask about risk, lifestyle, medication, or say 'generate a patient report'"
-                placeholderTextColor="#9CA3AF"
-                value={inputText}
-                onChangeText={setInputText}
-                multiline
-                maxLength={500}
-                style={{ maxHeight: 100 }}
-                editable={!sending}
-              />
+                <Text style={styles.threadSubtitle}>
+                  {selectedPatient?.label || 'Select a patient'}
+                </Text>
+              </View>
             </View>
+
             <TouchableOpacity
-              onPress={handleSend}
-              disabled={!inputText.trim() || sending}
-              className={`px-5 h-12 rounded-[20px] items-center justify-center shadow-md ${
-                inputText.trim() && !sending ? 'bg-primary' : 'bg-text-disabled'
-              }`}
-              activeOpacity={0.7}
+              style={styles.compactNewChatButton}
+              activeOpacity={0.85}
+              onPress={handleNewChat}
             >
-              {sending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text className="text-white text-sm font-bold">Send</Text>
-              )}
+              <Text style={styles.compactNewChatText}>New chat</Text>
             </TouchableOpacity>
           </View>
+
+          {patientContext ? (
+            <View style={styles.contextCard}>
+              <Text style={styles.contextLabel}>Active patient context</Text>
+              <Text style={styles.contextText}>
+                {(patientContext.risk_summary as string) ||
+                  (patientContext.latest_risk_summary as string) ||
+                  'The assistant will use the latest saved patient profile and recommendations.'}
+              </Text>
+            </View>
+          ) : null}
+
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.chatColumn}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+          >
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              renderItem={renderMessage}
+              style={styles.messageList}
+              contentContainerStyle={[
+                styles.messageListContent,
+                { paddingHorizontal: isDesktop ? 32 : 16 },
+              ]}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              showsVerticalScrollIndicator={false}
+            />
+
+            <View
+              style={[
+                styles.composerShell,
+                { paddingBottom: Math.max(insets.bottom, 12) },
+              ]}
+            >
+              <View style={styles.composerCard}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Message HealthSage..."
+                  placeholderTextColor="#94A3B8"
+                  value={inputText}
+                  onChangeText={setInputText}
+                  multiline
+                  maxLength={700}
+                  editable={!sending}
+                />
+                <TouchableOpacity
+                  onPress={handleSend}
+                  disabled={!inputText.trim() || sending}
+                  activeOpacity={0.85}
+                  style={[
+                    styles.sendButton,
+                    inputText.trim() && !sending ? styles.sendButtonActive : styles.sendButtonDisabled,
+                  ]}
+                >
+                  {sending ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.sendButtonText}>Send</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
         </View>
-      </KeyboardAvoidingView>
+      </View>
+
+      {!isDesktop ? (
+        <Modal
+          visible={sidebarVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setSidebarVisible(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <TouchableOpacity
+              style={styles.modalDismissArea}
+              activeOpacity={1}
+              onPress={() => setSidebarVisible(false)}
+            />
+            <View style={styles.sidebarMobile}>{sidebarContent}</View>
+          </View>
+        </Modal>
+      ) : null}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+  },
+  shell: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: colors.background.secondary,
+  },
+  sidebarDesktop: {
+    width: 320,
+    borderRightWidth: 1,
+    borderRightColor: colors.border.light,
+    backgroundColor: colors.background.card,
+  },
+  sidebarMobile: {
+    width: '86%',
+    maxWidth: 340,
+    height: '100%',
+    backgroundColor: colors.background.card,
+    borderTopRightRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: 'hidden',
+  },
+  modalBackdrop: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: colors.overlay.medium,
+  },
+  modalDismissArea: {
+    flex: 1,
+  },
+  sidebarPanel: {
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 20,
+  },
+  sidebarHeader: {
+    marginBottom: 18,
+  },
+  sidebarEyebrow: {
+    color: colors.text.secondary,
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  sidebarTitle: {
+    color: colors.text.primary,
+    fontSize: 26,
+    lineHeight: 32,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  newChatButton: {
+    borderRadius: 18,
+    backgroundColor: colors.primary.main,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 18,
+  },
+  newChatButtonText: {
+    color: colors.primary.contrast,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  continueLatestButton: {
+    borderRadius: 18,
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 18,
+  },
+  continueLatestLabel: {
+    color: colors.text.secondary,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  continueLatestTitle: {
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  sidebarSectionLabel: {
+    color: colors.text.secondary,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
+    marginBottom: 10,
+  },
+  patientList: {
+    maxHeight: 168,
+    marginBottom: 16,
+  },
+  patientListContent: {
+    gap: 8,
+  },
+  patientChip: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    backgroundColor: colors.background.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  patientChipActive: {
+    borderColor: colors.primary.main,
+    backgroundColor: colors.primary.light,
+  },
+  patientChipText: {
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  patientChipTextActive: {
+    color: colors.text.primary,
+  },
+  sessionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sessionCountText: {
+    color: colors.text.tertiary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sessionList: {
+    flex: 1,
+  },
+  emptySessionCard: {
+    borderRadius: 18,
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+  },
+  emptySessionText: {
+    color: colors.text.secondary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  sessionCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    backgroundColor: colors.background.card,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 10,
+  },
+  sessionCardActive: {
+    borderColor: colors.primary.main,
+    backgroundColor: colors.primary.light,
+  },
+  sessionTitle: {
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  sessionTitleActive: {
+    color: colors.text.primary,
+  },
+  sessionPreview: {
+    color: colors.text.secondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 6,
+  },
+  sessionMeta: {
+    color: colors.text.tertiary,
+    fontSize: 11,
+    marginTop: 10,
+  },
+  sessionOpenHint: {
+    color: colors.primary.dark,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  mainPanel: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+  },
+  mainHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    backgroundColor: colors.background.card,
+  },
+  mainHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  mobileSidebarButton: {
+    borderRadius: 14,
+    backgroundColor: colors.background.secondary,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginRight: 12,
+  },
+  mobileSidebarButtonText: {
+    color: colors.text.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  threadTitle: {
+    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  threadSubtitle: {
+    color: colors.text.secondary,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  compactNewChatButton: {
+    borderRadius: 14,
+    backgroundColor: colors.primary.main,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginLeft: 12,
+  },
+  compactNewChatText: {
+    color: colors.primary.contrast,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  contextCard: {
+    marginHorizontal: 18,
+    marginTop: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    backgroundColor: colors.background.card,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  contextLabel: {
+    color: colors.primary.dark,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  contextText: {
+    color: colors.text.secondary,
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  chatColumn: {
+    flex: 1,
+  },
+  messageList: {
+    flex: 1,
+  },
+  messageListContent: {
+    paddingTop: 18,
+    paddingBottom: 24,
+  },
+  messageRow: {
+    marginBottom: 18,
+  },
+  messageRowUser: {
+    alignItems: 'flex-end',
+  },
+  messageRowBot: {
+    alignItems: 'stretch',
+  },
+  messageBubble: {
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+  },
+  userBubble: {
+    maxWidth: 720,
+    backgroundColor: colors.primary.main,
+  },
+  botBubble: {
+    width: '100%',
+    backgroundColor: colors.background.card,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  botBubbleDesktop: {
+    maxWidth: 860,
+    alignSelf: 'center',
+  },
+  userMessageText: {
+    color: colors.primary.contrast,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  timestamp: {
+    fontSize: 12,
+    color: colors.text.tertiary,
+    marginTop: 6,
+  },
+  timestampUser: {
+    marginRight: 8,
+  },
+  timestampBot: {
+    marginLeft: 8,
+  },
+  composerShell: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+    backgroundColor: colors.background.card,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  composerCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.border.medium,
+    backgroundColor: colors.background.card,
+    paddingLeft: 16,
+    paddingRight: 10,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  input: {
+    flex: 1,
+    minHeight: 28,
+    maxHeight: 140,
+    color: colors.text.primary,
+    fontSize: 15,
+    lineHeight: 22,
+    paddingRight: 12,
+  },
+  sendButton: {
+    borderRadius: 18,
+    minWidth: 78,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendButtonActive: {
+    backgroundColor: colors.primary.main,
+  },
+  sendButtonDisabled: {
+    backgroundColor: colors.text.disabled,
+  },
+  sendButtonText: {
+    color: colors.primary.contrast,
+    fontSize: 14,
+    fontWeight: '700',
+  },
   markdownBlock: {
     marginBottom: 10,
   },
   markdownParagraph: {
-    color: '#111827',
+    color: colors.text.primary,
     fontSize: 14,
     lineHeight: 22,
   },
   markdownHeadingLarge: {
-    color: '#0F172A',
+    color: colors.text.primary,
     fontSize: 20,
     lineHeight: 26,
     fontWeight: '800',
   },
   markdownHeadingMedium: {
-    color: '#0F172A',
+    color: colors.text.primary,
     fontSize: 17,
     lineHeight: 23,
     fontWeight: '700',
   },
   markdownHeadingSmall: {
-    color: '#1F2937',
+    color: colors.text.primary,
     fontSize: 15,
     lineHeight: 21,
     fontWeight: '700',
   },
   markdownStrong: {
-    color: '#0F172A',
+    color: colors.text.primary,
     fontWeight: '700',
   },
   markdownEmphasis: {
-    color: '#334155',
+    color: colors.text.secondary,
     fontStyle: 'italic',
   },
   markdownLink: {
-    color: '#0F766E',
+    color: colors.primary.dark,
     textDecorationLine: 'underline',
     fontWeight: '600',
   },
   inlineCode: {
-    backgroundColor: '#EEF2FF',
-    color: '#312E81',
+    backgroundColor: colors.background.secondary,
+    color: colors.text.primary,
     fontSize: 13,
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
     paddingHorizontal: 6,
@@ -673,14 +1264,14 @@ const styles = StyleSheet.create({
   },
   quoteBlock: {
     borderLeftWidth: 4,
-    borderLeftColor: '#14B8A6',
-    backgroundColor: '#F0FDFA',
+    borderLeftColor: colors.primary.main,
+    backgroundColor: colors.primary.light,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 14,
   },
   quoteText: {
-    color: '#134E4A',
+    color: colors.text.primary,
     fontSize: 14,
     lineHeight: 22,
   },
@@ -691,14 +1282,14 @@ const styles = StyleSheet.create({
   },
   listBullet: {
     width: 18,
-    color: '#0F766E',
+    color: colors.primary.dark,
     fontSize: 18,
     lineHeight: 22,
     fontWeight: '700',
   },
   listNumber: {
     width: 24,
-    color: '#0F766E',
+    color: colors.primary.dark,
     fontSize: 14,
     lineHeight: 22,
     fontWeight: '700',
@@ -709,16 +1300,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: '#E2E8F0',
-    color: '#334155',
+    backgroundColor: colors.background.secondary,
+    color: colors.text.secondary,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.6,
   },
   codeBlock: {
     minWidth: '100%',
-    backgroundColor: '#0F172A',
-    color: '#E2E8F0',
+    backgroundColor: colors.background.dark,
+    color: colors.text.inverse,
     fontSize: 13,
     lineHeight: 20,
     paddingHorizontal: 14,

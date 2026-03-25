@@ -9,11 +9,14 @@ export interface ChatWithHistoryRequest {
   mode?: string;
   conversation_id?: string | null;
   subject?: string;
+  start_new?: boolean;
 }
 
 export interface ChatWithHistoryResponse {
   response: {
     final_message: string;
+    detailed_message?: string | null;
+    summary_message?: string | null;
     agent_outputs?: Record<string, unknown>;
     mode?: string;
     patient_id?: string;
@@ -23,13 +26,28 @@ export interface ChatWithHistoryResponse {
   conversation_id: string;
   message_id_user?: string;
   message_id_assistant?: string;
-  transcript?: Array<{ id?: string; role: string; content: string; created_at?: string }>;
+  transcript?: { id?: string; role: string; content: string; created_at?: string }[];
 }
 
 export interface ConversationTranscriptResponse {
   conversation_id: string | null;
   patient_id: string;
-  transcript: Array<{ id?: string; role: string; content: string; created_at?: string }>;
+  transcript: { id?: string; role: string; content: string; created_at?: string }[];
+}
+
+export interface ConversationSummary {
+  conversation_id: string;
+  patient_id: string;
+  subject: string;
+  preview: string;
+  message_count: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PatientConversationListResponse {
+  patient_id: string;
+  conversations: ConversationSummary[];
 }
 
 class ChatbotService {
@@ -45,6 +63,9 @@ class ChatbotService {
     };
     if (payload.conversation_id) {
       body.conversation_id = payload.conversation_id;
+    }
+    if (payload.start_new) {
+      body.start_new = true;
     }
     return await apiClient.post<ChatWithHistoryResponse>('/chatbot/chat', body);
   }
@@ -62,9 +83,19 @@ class ChatbotService {
     );
   }
 
-  async getConversationTranscript(conversationId: string): Promise<ConversationTranscriptResponse> {
+  async listPatientConversations(patientId: string): Promise<PatientConversationListResponse> {
+    return await apiClient.get<PatientConversationListResponse>(
+      `/chatbot/patients/${patientId}/conversations`,
+    );
+  }
+
+  async getConversationTranscript(
+    conversationId: string,
+    patientId?: string,
+  ): Promise<ConversationTranscriptResponse> {
+    const query = patientId ? `?patient_id=${encodeURIComponent(patientId)}` : '';
     return await apiClient.get<ConversationTranscriptResponse>(
-      `/chatbot/conversations/${conversationId}/transcript`,
+      `/chatbot/conversations/${conversationId}/transcript${query}`,
     );
   }
 }

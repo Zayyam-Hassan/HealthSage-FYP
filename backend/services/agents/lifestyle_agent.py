@@ -8,6 +8,8 @@ from typing import Any, Dict
 
 from services.lifestyle.service import generate_and_store_lifestyle_recs
 
+from .response_formatter import build_detailed_lifestyle_message, build_lifestyle_detail_sections
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,12 +26,18 @@ class LifestyleAgent:
         except Exception as e:
             logger.exception("LifestyleAgent failed for patient %s: %s", patient_id, e)
             raise
+        data = {
+            "patient_id": result.get("patient_id"),
+            "context": result.get("context"),
+            "guidelines_used": result.get("guidelines_used", []),
+            "plan": result.get("plan", {}),
+        }
+        wrapped = {"agent": "lifestyle", "data": data}
         return {
             "agent": "lifestyle",
             "data": {
-                "patient_id": result.get("patient_id"),
-                "context": result.get("context"),
-                "guidelines_used": result.get("guidelines_used", []),
-                "plan": result.get("plan", {}),
+                **data,
+                "detailed_response": build_lifestyle_detail_sections(wrapped),
+                "detailed_message": build_detailed_lifestyle_message(wrapped),
             },
         }
