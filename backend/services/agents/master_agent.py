@@ -22,6 +22,7 @@ from .lifestyle_agent import LifestyleAgent
 from .medication_agent import MedicationAgent
 from .response_formatter import build_chatbot_detail_bundle, format_chatbot_summary
 from .whatif_agent import WhatIfAgent
+from services.what_if_analysis import extract_what_if_changes
 
 try:
     from dotenv import load_dotenv
@@ -206,7 +207,7 @@ class MasterAgent:
 
             if tool_name == "what_if":
                 changes = payload.what_if_changes or {}
-                return self._whatif.run(patient_id, changes)
+                return self._whatif.run(patient_id, changes, doctor_query=payload.doctor_query)
 
             if tool_name == "compare":
                 risk_output = agent_outputs.get("get_risk_explain") or agent_outputs.get("get_risk")
@@ -270,6 +271,14 @@ class MasterAgent:
             )
 
         decision = _parse_tool_decision(raw_decision)
+        extracted_changes = extract_what_if_changes(doctor_query)
+        if not decision["tools"] and extracted_changes:
+            lowered = doctor_query.lower()
+            if any(
+                token in lowered
+                for token in ("what if", "what-if", "simulate", "scenario", "suppose", " if ", "goes", "becomes")
+            ):
+                decision["tools"] = ["what_if"]
 
         # No tools: use reply_without_tools
         if not decision["tools"]:

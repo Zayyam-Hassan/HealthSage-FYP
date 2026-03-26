@@ -293,22 +293,42 @@ export default function PatientDetailsScreen() {
           )}
 
           {/* Action Buttons */}
-          <View className="flex-row gap-3 mb-4">
+          <View className="mb-4">
             <Button
               variant="outline"
               onPress={() => router.push(`/patients/${patient.id}/edit` as any)}
-              className="flex-1"
+              className="mb-3"
             >
               Edit Patient
             </Button>
             {role === 'doctor' ? (
-              <Button
-                variant="primary"
-                onPress={() => router.push(`/patients/${patient.id}/treatment` as any)}
-                className="flex-1"
-              >
-                Treatment Plan
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  onPress={() => router.push(`/patients/${patient.id}/treatment` as any)}
+                  className="mb-3"
+                >
+                  Treatment Plan
+                </Button>
+                <Button
+                  variant="outline"
+                  onPress={() => router.push(`/patients/${patient.id}/what-if` as any)}
+                  className="mb-3"
+                >
+                  What-If Analysis
+                </Button>
+                <Button
+                  variant="outline"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/reports',
+                      params: { patientId: patient.id },
+                    } as any)
+                  }
+                >
+                  Reports
+                </Button>
+              </>
             ) : null}
           </View>
         </View>

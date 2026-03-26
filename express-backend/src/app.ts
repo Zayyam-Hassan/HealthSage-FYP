@@ -18,8 +18,11 @@ import { chatbotRouter } from './routes/chatbot';
 import { compatibilityRouter } from './routes/compatibility';
 import { schedulingRouter } from './routes/scheduling';
 import { treatmentRouter } from './routes/treatment';
+import { reportModuleRouter } from './routes/reportModule';
+import { whatIfRouter } from './routes/whatIf';
 
 const app = express();
+const JSON_BODY_LIMIT = '25mb';
 
 app.use(helmet());
 app.use(
@@ -39,7 +42,8 @@ app.use(
     credentials: false,
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 app.use(cookieParser());
 app.use(
   morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'),
@@ -55,6 +59,8 @@ app.use('/api/v1/mongo/patients', patientsRouter);
 app.use('/api/v1/mongo/doctors', doctorsRouter);
 app.use('/api/v1/mongo/appointments', appointmentsRouter);
 app.use('/api/v1/mongo/reports', reportsRouter);
+app.use('/api/v1/reports', reportModuleRouter);
+app.use('/api/v1/what-if', whatIfRouter);
 app.use('/api/v1/mongo/medications', medicationsRouter);
 app.use('/api/v1/scheduling', schedulingRouter);
 app.use('/api/v1/treatment', treatmentRouter);

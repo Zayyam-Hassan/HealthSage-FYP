@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import AppDialog from '@/components/AppDialog';
 import Header from '@/components/Header';
 import Button from '@/components/Button';
@@ -16,6 +17,7 @@ type FeatureBar = {
 };
 
 export default function RiskPredictionScreen() {
+  const router = useRouter();
   const [role, setRole] = useState<UserRole | null>(null);
   const [patientId, setPatientId] = useState('');
   const [patients, setPatients] = useState<any[]>([]);
@@ -181,6 +183,15 @@ export default function RiskPredictionScreen() {
               className="mt-4"
             >
               Run risk prediction
+            </Button>
+            <Button
+              variant="outline"
+              onPress={() => router.push(`/patients/${patientId}/what-if` as any)}
+              disabled={!patientId}
+              fullWidth
+              className="mt-3"
+            >
+              Open what-if workspace
             </Button>
           </Card>
 

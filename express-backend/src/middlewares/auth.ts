@@ -15,6 +15,11 @@ function extractToken(req: Request): string | null {
   if (header && header.startsWith('Bearer ')) {
     return header.slice('Bearer '.length).trim();
   }
+  const queryToken =
+    typeof req.query.access_token === 'string' ? req.query.access_token.trim() : '';
+  if (queryToken) {
+    return queryToken;
+  }
   return null;
 }
 

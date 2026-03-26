@@ -9,6 +9,15 @@ export function errorHandler(
   res: Response,
   _next: NextFunction,
 ): void {
+  if (err?.type === 'entity.too.large') {
+    res.status(413).json({
+      message:
+        'Request entity too large. Upload a smaller file or keep the report upload under the 10MB file limit.',
+      detail: err.message,
+    });
+    return;
+  }
+
   const status =
     typeof err.status === 'number' && err.status >= 400 && err.status < 600
       ? err.status

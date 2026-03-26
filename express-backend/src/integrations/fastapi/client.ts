@@ -31,6 +31,22 @@ export async function callExplainRisk(payload: { patient_id: string; model_type?
   return res.data;
 }
 
+export async function callWhatIfBaseline(patientId: string) {
+  const res = await fastApiClient.get(`/what-if/patients/${encodeURIComponent(patientId)}/baseline`);
+  return res.data;
+}
+
+export async function callWhatIfCompare(
+  patientId: string,
+  payload: { scenario_name?: string; modifications: Record<string, unknown> },
+) {
+  const res = await fastApiClient.post(
+    `/what-if/patients/${encodeURIComponent(patientId)}/compare`,
+    payload,
+  );
+  return res.data;
+}
+
 export async function callCompatibility(patientId: string, medicationId: string) {
   const res = await fastApiClient.get(
     `/compatibility/${encodeURIComponent(patientId)}/${encodeURIComponent(medicationId)}`,

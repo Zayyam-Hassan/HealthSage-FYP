@@ -13,6 +13,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import * as ExpoLinking from 'expo-linking';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppDialog from '@/components/AppDialog';
@@ -27,6 +28,7 @@ interface Message {
   text: string;
   sender: 'user' | 'bot';
   timestamp: Date;
+  whatIfComparison?: Record<string, any> | null;
 }
 
 type MarkdownBlock =
@@ -311,7 +313,104 @@ function mapTranscriptToMessages(
     text: message.content,
     sender: message.role === 'user' ? 'user' : 'bot',
     timestamp: message.created_at ? new Date(message.created_at) : new Date(),
+    whatIfComparison: null,
   }));
+}
+
+function attachLatestAssistantComparison(
+  transcriptMessages: Message[],
+  comparison: Record<string, any> | null | undefined,
+): Message[] {
+  if (!comparison) {
+    return transcriptMessages;
+  }
+  const next = [...transcriptMessages];
+  for (let index = next.length - 1; index >= 0; index -= 1) {
+    if (next[index]?.sender === 'bot') {
+      next[index] = {
+        ...next[index],
+        whatIfComparison: comparison,
+      };
+      break;
+    }
+  }
+  return next;
+}
+
+function formatRiskPill(label?: string) {
+  const normalized = String(label ?? '').toLowerCase();
+  if (normalized === 'high') {
+    return { backgroundColor: '#FEE2E2', color: '#B91C1C' };
+  }
+  if (normalized === 'medium') {
+    return { backgroundColor: '#FEF3C7', color: '#B45309' };
+  }
+  return { backgroundColor: '#DCFCE7', color: '#166534' };
+}
+
+function formatRiskPercent(score?: number) {
+  return `${Math.round((score ?? 0) * 100)}%`;
+}
+
+function WhatIfDashboardCard({ comparison }: { comparison: Record<string, any> }) {
+  const baseline = comparison?.baseline ?? {};
+  const scenario = comparison?.scenario ?? {};
+  const delta = comparison?.risk_delta ?? {};
+  const changes = Array.isArray(comparison?.changes) ? comparison.changes : [];
+  const baselinePill = formatRiskPill(baseline?.risk_label);
+  const scenarioPill = formatRiskPill(scenario?.risk_label);
+
+  return (
+    <View style={styles.whatIfCard}>
+      <Text style={styles.whatIfTitle}>
+        {comparison?.scenario_name || 'What-If Analysis'}
+      </Text>
+
+      <View style={styles.whatIfSummaryRow}>
+        <View style={styles.whatIfSummaryColumn}>
+          <Text style={styles.whatIfLabel}>Baseline</Text>
+          <Text style={styles.whatIfValue}>{formatRiskPercent(baseline?.risk_score)}</Text>
+          <View style={[styles.whatIfPill, { backgroundColor: baselinePill.backgroundColor }]}>
+            <Text style={[styles.whatIfPillText, { color: baselinePill.color }]}>
+              {String(baseline?.risk_label || 'low').toUpperCase()}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.whatIfSummaryColumn}>
+          <Text style={styles.whatIfLabel}>Scenario</Text>
+          <Text style={styles.whatIfValue}>{formatRiskPercent(scenario?.risk_score)}</Text>
+          <View style={[styles.whatIfPill, { backgroundColor: scenarioPill.backgroundColor }]}>
+            <Text style={[styles.whatIfPillText, { color: scenarioPill.color }]}>
+              {String(scenario?.risk_label || 'low').toUpperCase()}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.whatIfDeltaBox}>
+        <Text style={styles.whatIfDeltaLabel}>Risk delta</Text>
+        <Text style={styles.whatIfDeltaValue}>
+          {Number(delta?.absolute ?? 0) > 0 ? '+' : ''}
+          {Number(delta?.absolute ?? 0).toFixed(2)} ({delta?.relative_percent ?? 0}%)
+        </Text>
+        <Text style={styles.whatIfDeltaDirection}>
+          {String(delta?.direction || 'no_change').replace(/_/g, ' ')}
+        </Text>
+      </View>
+
+      {changes.length > 0 ? (
+        <View style={styles.whatIfChangesBlock}>
+          <Text style={styles.whatIfSectionTitle}>Changed features</Text>
+          {changes.slice(0, 5).map((change: any, index: number) => (
+            <Text key={`${change?.feature || index}`} style={styles.whatIfChangeLine}>
+              - {change?.label || change?.feature}: {change?.baseline_value} {'->'} {change?.scenario_value}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 function formatSessionTime(value?: string) {
@@ -329,9 +428,16 @@ function isValidConversationId(value?: string | null): value is string {
 }
 
 export default function ChatbotScreen() {
+  const params = useLocalSearchParams<{ patientId?: string; seedPrompt?: string; autoSend?: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
+  const requestedPatientId =
+    typeof params.patientId === 'string' ? params.patientId : null;
+  const requestedSeedPrompt =
+    typeof params.seedPrompt === 'string' ? params.seedPrompt : '';
+  const requestedAutoSend =
+    params.autoSend === '1' || params.autoSend === 'true';
   const [role, setRole] = useState<UserRole | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -349,6 +455,7 @@ export default function ChatbotScreen() {
     message: string;
   }>({ visible: false, title: '', message: '' });
   const flatListRef = useRef<FlatList<Message>>(null);
+  const seededPromptSentRef = useRef(false);
 
   const selectedPatient = useMemo(
     () => patientOptions.find((option) => option.id === patientId) ?? null,
@@ -385,8 +492,10 @@ export default function ChatbotScreen() {
           label: p.full_name || p.patient_id || p.id,
         }));
         setPatientOptions(options);
-        setPatientId(options[0]?.id ?? null);
-        setMessages(options[0] ? [buildIntroMessage(options[0].label)] : [buildIntroMessage()]);
+        const initialPatient =
+          options.find((option) => option.id === requestedPatientId) ?? options[0] ?? null;
+        setPatientId(initialPatient?.id ?? null);
+        setMessages(initialPatient ? [buildIntroMessage(initialPatient.label)] : [buildIntroMessage()]);
       } catch (error) {
         console.error('Failed to load patients for chatbot:', error);
         setMessages([
@@ -399,7 +508,18 @@ export default function ChatbotScreen() {
         ]);
       }
     })();
-  }, []);
+  }, [requestedPatientId]);
+
+  useEffect(() => {
+    if (role !== 'doctor' || !patientId || !requestedSeedPrompt.trim()) {
+      return;
+    }
+    setInputText((current) => current || requestedSeedPrompt.trim());
+  }, [patientId, requestedSeedPrompt, role]);
+
+  useEffect(() => {
+    seededPromptSentRef.current = false;
+  }, [requestedPatientId, requestedSeedPrompt]);
 
   useEffect(() => {
     if (!patientId) {
@@ -457,8 +577,8 @@ export default function ChatbotScreen() {
     );
   };
 
-  const handleSend = async () => {
-    const text = inputText.trim();
+  const handleSend = async (overrideText?: string) => {
+    const text = (overrideText ?? inputText).trim();
     if (!text) return;
 
     if (role !== 'doctor') {
@@ -487,7 +607,11 @@ export default function ChatbotScreen() {
     };
 
     setMessages((prev) => [...prev, pendingUserMessage]);
-    setInputText('');
+    if (!overrideText) {
+      setInputText('');
+    } else {
+      setInputText('');
+    }
     setSending(true);
 
     try {
@@ -510,7 +634,12 @@ export default function ChatbotScreen() {
       }
 
       if ((response.transcript ?? []).length > 0) {
-        setMessages(mapTranscriptToMessages(response.transcript ?? []));
+        setMessages(
+          attachLatestAssistantComparison(
+            mapTranscriptToMessages(response.transcript ?? []),
+            (response.response?.agent_outputs as any)?.whatif?.comparison,
+          ),
+        );
       } else {
         const botText = response.response?.final_message ?? 'No response from assistant.';
         setMessages((prev) => [
@@ -520,6 +649,7 @@ export default function ChatbotScreen() {
             text: botText,
             sender: 'bot',
             timestamp: new Date(),
+            whatIfComparison: (response.response?.agent_outputs as any)?.whatif?.comparison ?? null,
           },
         ]);
       }
@@ -548,6 +678,24 @@ export default function ChatbotScreen() {
       setSending(false);
     }
   };
+
+  useEffect(() => {
+    if (
+      !requestedAutoSend ||
+      seededPromptSentRef.current ||
+      role !== 'doctor' ||
+      !patientId ||
+      !requestedSeedPrompt.trim() ||
+      sending
+    ) {
+      return;
+    }
+
+    seededPromptSentRef.current = true;
+    handleSend(requestedSeedPrompt.trim()).catch(() => {
+      seededPromptSentRef.current = false;
+    });
+  }, [patientId, requestedAutoSend, requestedSeedPrompt, role, sending]);
 
   const handleNewChat = () => {
     setConversationId(null);
@@ -612,7 +760,12 @@ export default function ChatbotScreen() {
           {isUser ? (
             <Text style={styles.userMessageText}>{item.text}</Text>
           ) : (
-            <BotMarkdown text={item.text} />
+            <View>
+              <BotMarkdown text={item.text} />
+              {item.whatIfComparison ? (
+                <WhatIfDashboardCard comparison={item.whatIfComparison} />
+              ) : null}
+            </View>
           )}
         </View>
         <Text style={[styles.timestamp, isUser ? styles.timestampUser : styles.timestampBot]}>
@@ -807,7 +960,9 @@ export default function ChatbotScreen() {
                   editable={!sending}
                 />
                 <TouchableOpacity
-                  onPress={handleSend}
+                  onPress={() => {
+                    handleSend().catch(() => undefined);
+                  }}
                   disabled={!inputText.trim() || sending}
                   activeOpacity={0.85}
                   style={[
@@ -1213,6 +1368,99 @@ const styles = StyleSheet.create({
     color: colors.primary.contrast,
     fontSize: 14,
     fontWeight: '700',
+  },
+  whatIfCard: {
+    marginTop: 14,
+    borderRadius: 18,
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    padding: 14,
+  },
+  whatIfTitle: {
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  whatIfSummaryRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  whatIfSummaryColumn: {
+    flex: 1,
+    backgroundColor: colors.background.card,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  whatIfLabel: {
+    color: colors.text.tertiary,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+    marginBottom: 4,
+  },
+  whatIfValue: {
+    color: colors.text.primary,
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  whatIfPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  whatIfPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  whatIfDeltaBox: {
+    borderRadius: 14,
+    backgroundColor: colors.background.card,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    padding: 12,
+    marginBottom: 12,
+  },
+  whatIfDeltaLabel: {
+    color: colors.text.tertiary,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+    marginBottom: 4,
+  },
+  whatIfDeltaValue: {
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  whatIfDeltaDirection: {
+    color: colors.text.secondary,
+    fontSize: 13,
+  },
+  whatIfChangesBlock: {
+    marginTop: 2,
+  },
+  whatIfSectionTitle: {
+    color: colors.text.primary,
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  whatIfChangeLine: {
+    color: colors.text.secondary,
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 4,
   },
   markdownBlock: {
     marginBottom: 10,

@@ -16,6 +16,7 @@ from .lifestyle_agent import LifestyleAgent
 from .medication_agent import MedicationAgent
 from .response_formatter import build_chatbot_detail_bundle
 from .whatif_agent import WhatIfAgent
+from services.what_if_analysis import extract_what_if_changes
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,15 @@ def _infer_mode_from_query(doctor_query: str) -> str:
     if not doctor_query or not isinstance(doctor_query, str):
         return "recommend"
     q = doctor_query.strip().lower()
-    if "what if" in q or "what-if" in q or "whatif" in q or "hypothetical" in q or "suppose" in q:
+    if (
+        "what if" in q
+        or "what-if" in q
+        or "whatif" in q
+        or "hypothetical" in q
+        or "suppose" in q
+        or "simulate" in q
+        or (" if " in f" {q} " and bool(extract_what_if_changes(q)))
+    ):
         return "what_if"
     if "explain" in q or "why " in q or "reason" in q or "factor" in q:
         return "explain"
@@ -61,7 +70,11 @@ class CoordinatorAgent:
 
         if mode == "what_if":
             what_if_changes = payload.what_if_changes or {}
-            whatif_output = self._whatif.run(patient_id, what_if_changes)
+            whatif_output = self._whatif.run(
+                patient_id,
+                what_if_changes,
+                doctor_query=payload.doctor_query,
+            )
             expl = whatif_output.get("whatif_explanation") or {}
             explainability_output = {
                 "whatif_explanation": expl.get("whatif_explanation"),
@@ -73,9 +86,7 @@ class CoordinatorAgent:
             message_bundle = build_chatbot_detail_bundle(
                 mode=mode,
                 whatif_output=whatif_output,
-                risk_output=whatif_output.get("original_outputs", {}).get("risk"),
-                lifestyle_output=whatif_output.get("original_outputs", {}).get("lifestyle"),
-                medication_output=whatif_output.get("original_outputs", {}).get("medication"),
+                risk_output=(whatif_output.get("comparison") or {}).get("scenario"),
                 explainability_output=explainability_output,
                 user_query=payload.doctor_query,
             )
@@ -83,9 +94,7 @@ class CoordinatorAgent:
                 mode=mode,
                 patient_id=patient_id,
                 agent_outputs={
-                    "risk": whatif_output.get("original_outputs", {}).get("risk"),
-                    "lifestyle": whatif_output.get("original_outputs", {}).get("lifestyle"),
-                    "medication": whatif_output.get("original_outputs", {}).get("medication"),
+                    "risk": (whatif_output.get("comparison") or {}).get("scenario"),
                     "explainability": explainability_output,
                     "whatif": whatif_output,
                 },

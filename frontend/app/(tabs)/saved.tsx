@@ -10,14 +10,17 @@ import Loader from '@/components/Loader';
 import ReportCard from '@/components/Card/ReportCard';
 import { appointmentsService } from '@/services/appointments';
 import { authService, type UserRole } from '@/services/auth';
-import { reportsService, type Report } from '@/services/reports';
+import {
+  reportsService,
+  type ReportOverviewResponse,
+} from '@/services/reports';
 
 export default function SavedScreen() {
   const router = useRouter();
   const [role, setRole] = useState<UserRole | null>(null);
   const [activeTab, setActiveTab] = useState<'appointments' | 'reports'>('appointments');
   const [appointments, setAppointments] = useState<any[]>([]);
-  const [reports, setReports] = useState<Report[]>([]);
+  const [reportOverview, setReportOverview] = useState<ReportOverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadRecords = async () => {
@@ -29,10 +32,12 @@ export default function SavedScreen() {
         currentRole === 'doctor'
           ? appointmentsService.getDoctorAppointments({ limit: 50 })
           : appointmentsService.getPatientAppointments({ limit: 50 }),
-        reportsService.getReports({ limit: 50 }),
+        currentRole === 'patient'
+          ? reportsService.getPatientReportsOverview().catch(() => null)
+          : Promise.resolve(null),
       ]);
       setAppointments(appointmentRes.items);
-      setReports(reportRes.items);
+      setReportOverview(reportRes);
     } finally {
       setLoading(false);
     }
@@ -64,7 +69,7 @@ export default function SavedScreen() {
         <Card className="mb-4 bg-primary/5 border border-primary/20">
           <Text className="text-xl font-bold text-text mb-1">Records</Text>
           <Text className="text-sm text-text-secondary">
-            Review scheduled appointments and generated care reports in one place.
+            Review scheduled appointments and report records in one place.
           </Text>
         </Card>
         <View className="flex-row bg-bg-secondary rounded-xl p-1">
@@ -128,27 +133,48 @@ export default function SavedScreen() {
             onActionPress={role === 'patient' ? () => router.push('/appointments' as any) : undefined}
           />
         )
-      ) : reports.length > 0 ? (
+      ) : role === 'doctor' ? (
+        <EmptyState
+          title="Patient reports live in patient workspaces"
+          message="Open the reports workspace and choose a patient to manage uploaded and generated reports."
+          actionLabel="Open reports"
+          onActionPress={() => router.push('/reports' as any)}
+        />
+      ) : (reportOverview?.uploaded_reports?.length ?? 0) > 0 ||
+        (reportOverview?.generated_reports?.length ?? 0) > 0 ? (
         <FlatList
-          data={reports}
-          keyExtractor={(item) => item.id}
+          data={[
+            ...(reportOverview?.uploaded_reports ?? []).map((item) => ({
+              id: item.id,
+              title: item.title,
+              date: item.created_at,
+              type: `uploaded • ${item.category.replace(/_/g, ' ')}`,
+              preview: item.description || item.file_name,
+              kind: 'uploaded' as const,
+            })),
+            ...(reportOverview?.generated_reports ?? []).map((item) => ({
+              id: item.id,
+              title: item.title,
+              date: item.created_at,
+              type: `generated • ${item.report_type.replace(/_/g, ' ')}`,
+              preview: item.summary || 'Generated summary available',
+              kind: 'generated' as const,
+            })),
+          ]}
+          keyExtractor={(item) => `${item.kind}-${item.id}`}
           renderItem={({ item }) => (
             <View className="px-6">
               <ReportCard
                 title={item.title}
-                date={new Date(item.generated_at).toLocaleDateString()}
+                date={new Date(item.date).toLocaleDateString()}
                 type={item.type}
-                preview={
-                  typeof item.content === 'object'
-                    ? String(
-                        (item.content as any).overview ||
-                          (item.content as any).latest_risk_summary ||
-                          (item.content as any).patient_friendly_title ||
-                          'Care summary',
-                      )
-                    : String(item.content)
+                preview={item.preview}
+                onPress={() =>
+                  router.push({
+                    pathname: '/reports/[id]',
+                    params: { id: item.id, kind: item.kind },
+                  } as any)
                 }
-                onPress={() => router.push(`/reports/${item.id}` as any)}
               />
             </View>
           )}
@@ -157,7 +183,7 @@ export default function SavedScreen() {
       ) : (
         <EmptyState
           title="No reports yet"
-          message="Generated prediction and care guidance reports will appear here."
+          message="Uploaded documents and generated reports will appear here."
         />
       )}
     </SafeAreaView>

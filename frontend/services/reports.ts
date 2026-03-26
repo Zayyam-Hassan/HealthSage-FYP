@@ -1,131 +1,139 @@
-/**
- * Reports API service — wired to backend /api/v1/mongo/reports
- */
 import { apiClient } from './api';
 
-export interface Report {
+export type UploadedReportCategory =
+  | 'lab_report'
+  | 'prescription'
+  | 'imaging'
+  | 'discharge_summary'
+  | 'test_result'
+  | 'doctor_note'
+  | 'general_document';
+
+export interface UploadedReport {
   id: string;
   patient_id: string;
+  doctor_id: string | null;
   title: string;
-  type: 'lab_report' | 'ai_summary' | 'visit_summary' | 'other';
-  content: Record<string, unknown>;
-  generated_at: string;
-  generated_by?: string;
-  attachment_url?: string;
-  is_sent_to_patient?: boolean;
-  sent_to_patient_at?: string | null;
-  last_sent_at?: string | null;
-  send_count?: number;
+  category: UploadedReportCategory;
+  description: string | null;
+  uploaded_by_role: 'patient' | 'doctor';
+  uploaded_by_user_id: string;
+  file_name: string;
+  mime_type: string;
+  file_size: number | null;
+  file_url: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface ReportCreate {
+export interface GeneratedReport {
+  id: string;
   patient_id: string;
+  doctor_id: string | null;
+  report_type: string;
   title: string;
-  type: 'lab_report' | 'ai_summary' | 'visit_summary' | 'other';
-  content: Record<string, unknown>;
-  attachment_url?: string;
+  summary: string | null;
+  structured_payload: Record<string, unknown>;
+  generated_by: string | null;
+  source_reference: string | null;
+  attachment_url: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  page: number;
-  limit: number;
-  pages: number;
+export interface ReportOverviewResponse {
+  uploaded_reports: UploadedReport[];
+  generated_reports: GeneratedReport[];
 }
 
-interface BackendReportDoc {
-  id?: string;
-  _id?: string;
-  patient_id: string;
+export interface UploadedReportCreatePayload {
   title: string;
-  type: string;
-  content?: Record<string, unknown>;
-  generated_at?: string;
-  generated_by?: string;
-  attachment_url?: string;
-  is_sent_to_patient?: boolean;
-  sent_to_patient_at?: string | null;
-  last_sent_at?: string | null;
-  send_count?: number;
-  created_at?: string;
-  updated_at?: string;
+  category: UploadedReportCategory;
+  description?: string;
+  file_name: string;
+  mime_type: string;
+  file_data_base64: string;
 }
 
-function mapDoc(d: BackendReportDoc): Report {
-  const id = (d.id ?? d._id ?? '').toString();
-  const patientId = typeof d.patient_id === 'string' ? d.patient_id : (d.patient_id as { toString: () => string }).toString();
-  return {
-    id,
-    patient_id: patientId,
-    title: d.title,
-    type: (d.type as Report['type']) ?? 'other',
-    content: d.content ?? {},
-    generated_at: d.generated_at ?? d.created_at ?? new Date().toISOString(),
-    generated_by: d.generated_by,
-    attachment_url: d.attachment_url,
-    is_sent_to_patient: d.is_sent_to_patient ?? false,
-    sent_to_patient_at: d.sent_to_patient_at ?? null,
-    last_sent_at: d.last_sent_at ?? null,
-    send_count: d.send_count ?? 0,
-    created_at: d.created_at ?? new Date().toISOString(),
-    updated_at: d.updated_at ?? new Date().toISOString(),
-  };
-}
-
-const BASE = '/mongo/reports';
+const BASE = '/reports';
 
 class ReportsService {
-  async createReport(data: ReportCreate): Promise<Report> {
-    const doc = await apiClient.post<BackendReportDoc>(BASE, data);
-    return mapDoc(doc);
+  async uploadPatientReport(payload: UploadedReportCreatePayload): Promise<UploadedReport> {
+    return apiClient.post<UploadedReport>(`${BASE}/uploaded/patient`, payload);
   }
 
-  async getReports(params?: {
-    patient_id?: string;
-    type?: string;
-    page?: number;
-    limit?: number;
-  }): Promise<PaginatedResponse<Report>> {
-    const page = params?.page ?? 1;
-    const limit = params?.limit ?? 20;
-    const queryParams = new URLSearchParams();
-    queryParams.append('page', page.toString());
-    queryParams.append('limit', limit.toString());
-    if (params?.patient_id) queryParams.append('patient_id', params.patient_id);
-    if (params?.type) queryParams.append('type', params.type);
-    const query = queryParams.toString();
-    const response = await apiClient.get<{ items: BackendReportDoc[]; total: number; page: number; limit: number; pages: number }>(
-      `${BASE}?${query}`
+  async uploadDoctorReport(
+    patientId: string,
+    payload: UploadedReportCreatePayload,
+  ): Promise<UploadedReport> {
+    return apiClient.post<UploadedReport>(`${BASE}/uploaded/doctor/${patientId}`, payload);
+  }
+
+  async getPatientUploadedReports(): Promise<{ items: UploadedReport[] }> {
+    return apiClient.get<{ items: UploadedReport[] }>(`${BASE}/uploaded/patient`);
+  }
+
+  async getDoctorPatientUploadedReports(
+    patientId: string,
+  ): Promise<{ items: UploadedReport[] }> {
+    return apiClient.get<{ items: UploadedReport[] }>(
+      `${BASE}/uploaded/doctor/patients/${patientId}`,
     );
-    return {
-      items: (response.items ?? []).map(mapDoc),
-      total: response.total ?? 0,
-      page: response.page ?? 1,
-      limit: response.limit ?? 20,
-      pages: response.pages ?? 0,
-    };
   }
 
-  async getReport(reportId: string): Promise<Report> {
-    const doc = await apiClient.get<BackendReportDoc>(`${BASE}/${reportId}`);
-    return mapDoc(doc);
+  async getUploadedReport(reportId: string): Promise<UploadedReport> {
+    return apiClient.get<UploadedReport>(`${BASE}/uploaded/${reportId}`);
   }
 
-  async updateReport(reportId: string, data: Partial<ReportCreate>): Promise<Report> {
-    const doc = await apiClient.patch<BackendReportDoc>(`${BASE}/${reportId}`, data);
-    return mapDoc(doc);
+  async deleteUploadedReport(reportId: string): Promise<void> {
+    await apiClient.delete(`${BASE}/uploaded/${reportId}`);
   }
 
-  async sendReport(reportId: string): Promise<Report> {
-    const doc = await apiClient.post<BackendReportDoc>(`${BASE}/${reportId}/send`);
-    return mapDoc(doc);
+  async generateRiskSummary(patientId: string): Promise<GeneratedReport> {
+    return apiClient.post<GeneratedReport>(
+      `${BASE}/generated/patients/${patientId}/risk-summary`,
+      {},
+    );
   }
 
-  async deleteReport(reportId: string): Promise<void> {
-    await apiClient.delete(`${BASE}/${reportId}`);
+  async generateTreatmentSummary(patientId: string): Promise<GeneratedReport> {
+    return apiClient.post<GeneratedReport>(
+      `${BASE}/generated/patients/${patientId}/treatment-summary`,
+      {},
+    );
+  }
+
+  async generateOverview(patientId: string): Promise<GeneratedReport> {
+    return apiClient.post<GeneratedReport>(
+      `${BASE}/generated/patients/${patientId}/overview`,
+      {},
+    );
+  }
+
+  async getPatientGeneratedReports(): Promise<{ items: GeneratedReport[] }> {
+    return apiClient.get<{ items: GeneratedReport[] }>(`${BASE}/generated/patient`);
+  }
+
+  async getDoctorPatientGeneratedReports(
+    patientId: string,
+  ): Promise<{ items: GeneratedReport[] }> {
+    return apiClient.get<{ items: GeneratedReport[] }>(
+      `${BASE}/generated/doctor/patients/${patientId}`,
+    );
+  }
+
+  async getGeneratedReport(reportId: string): Promise<GeneratedReport> {
+    return apiClient.get<GeneratedReport>(`${BASE}/generated/${reportId}`);
+  }
+
+  async getPatientReportsOverview(): Promise<ReportOverviewResponse> {
+    return apiClient.get<ReportOverviewResponse>(`${BASE}/patient/overview`);
+  }
+
+  async getDoctorPatientReportsOverview(patientId: string): Promise<ReportOverviewResponse> {
+    return apiClient.get<ReportOverviewResponse>(
+      `${BASE}/doctor/patients/${patientId}/overview`,
+    );
   }
 }
 

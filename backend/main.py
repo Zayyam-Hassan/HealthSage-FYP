@@ -8,6 +8,7 @@ from api.lifestyle_routes import router as lifestyle_router
 from api.medication_routes import router as medication_router, rag_router as medication_rag_router
 from api.prediction_routes import router as prediction_router
 from api.risk_routes import router as risk_router
+from api.what_if_routes import router as what_if_router
 from api.mongo_routes import router as mongo_router
 from api.auth_routes import router as auth_router
 from app.db import get_db, ensure_indexes
@@ -38,6 +39,7 @@ app.add_middleware(
 app.add_event_handler("startup", _on_startup)
 
 app.include_router(risk_router, prefix=API_V1_PREFIX)
+app.include_router(what_if_router, prefix=API_V1_PREFIX)
 app.include_router(compatibility_router, prefix=API_V1_PREFIX)
 app.include_router(explain_router, prefix=API_V1_PREFIX)
 app.include_router(chatbot_router, prefix=API_V1_PREFIX)

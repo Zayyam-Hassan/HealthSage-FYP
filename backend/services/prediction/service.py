@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -89,6 +90,7 @@ class HGTNet(nn.Module):
 
 
 # ---------- Artifact loading (v2 first) ----------
+@lru_cache(maxsize=1)
 def _load_graphsage_artifacts() -> Dict[str, Any]:
     base = _find_artifact_dir(GRAPHSAGE_DIRS)
     metrics = _load_json(os.path.join(base, "metrics.json"))
@@ -97,6 +99,7 @@ def _load_graphsage_artifacts() -> Dict[str, Any]:
     return {"metrics": metrics, "config": config, "checkpoint": ckpt}
 
 
+@lru_cache(maxsize=1)
 def _load_hgt_artifacts() -> Dict[str, Any]:
     base = _find_artifact_dir(HGT_DIRS)
     metrics = _load_json(os.path.join(base, "metrics.json"))
@@ -260,21 +263,42 @@ def _feature_vector_from_patient_data(patient_data: Dict[str, Any], feature_meta
 # ---------- Mongo-based prediction (real features; faster than TTL for single patient) ----------
 def predict_graphsage_by_mongo_id(patient_id: str) -> Dict[str, Any]:
     patient_data = _patient_data_from_mongo(patient_id)
+    return predict_graphsage_from_patient_data(patient_data, patient_id=patient_id)
+
+
+def build_graphsage_patient_data(patient_id: str) -> Dict[str, Any]:
+    return dict(_patient_data_from_mongo(patient_id))
+
+
+def predict_graphsage_from_patient_data(
+    patient_data: Dict[str, Any],
+    patient_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    runtime = _get_graphsage_runtime()
+    meta = runtime["feature_meta"]
+    x = _feature_vector_from_patient_data(dict(patient_data), meta)
+    edge_index = torch.empty((2, 0), dtype=torch.long)
+    data = Data(x=x, edge_index=edge_index)
+    with torch.no_grad():
+        logits = runtime["model"](data.x, data.edge_index)
+        prob = torch.sigmoid(logits[0]).item()
+    threshold = runtime["threshold"]
+    return {"patient_id": patient_id, "probability": float(prob), "predicted_label": int(prob >= threshold)}
+
+
+@lru_cache(maxsize=1)
+def _get_graphsage_runtime() -> Dict[str, Any]:
     artifacts = _load_graphsage_artifacts()
-    meta = _get_feature_meta(artifacts)
-    x = _feature_vector_from_patient_data(patient_data, meta)
     ckpt = artifacts["checkpoint"]
     cfg = ckpt["config"]["model"]
     model = GraphSAGENet(ckpt["in_channels"], cfg["hidden_dim"], cfg["num_layers"], cfg["dropout"])
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
-    edge_index = torch.empty((2, 0), dtype=torch.long)
-    data = Data(x=x, edge_index=edge_index)
-    with torch.no_grad():
-        logits = model(data.x, data.edge_index)
-        prob = torch.sigmoid(logits[0]).item()
-    threshold = _get_threshold(artifacts)
-    return {"patient_id": patient_id, "probability": float(prob), "predicted_label": int(prob >= threshold)}
+    return {
+        "model": model,
+        "feature_meta": _get_feature_meta(artifacts),
+        "threshold": _get_threshold(artifacts),
+    }
 
 
 def predict_hgt_by_mongo_id(patient_id: str) -> Dict[str, Any]:

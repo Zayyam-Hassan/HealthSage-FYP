@@ -81,6 +81,11 @@ class AuthService {
     return null;
   }
 
+  async getAccessToken(): Promise<string | null> {
+    const user = await this.getCurrentUser();
+    return user?.access_token ?? null;
+  }
+
   async updateProfile(payload: UpdateProfilePayload): Promise<AuthUser> {
     const user = await apiClient.patch<AuthUser>('/auth/me', payload);
     await this.persistUser({

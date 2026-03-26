@@ -246,3 +246,86 @@ def explain_risk_prediction(patient_id: str, prediction: Dict[str, Any]) -> Dict
         ),
         "method": "feature_importance",
     }
+
+
+def explain_risk_from_patient_data(
+    patient_data: Dict[str, Any],
+    prediction: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Return structured explanation for a what-if scenario using the same
+    feature normalization path as GraphSAGE inference, without mutating Mongo data.
+    """
+    meta = _load_feature_meta()
+    names = meta.get("clinical_feature_names") or DEFAULT_FEATURE_NAMES
+
+    try:
+        from services.prediction.service import (
+            _feature_vector_from_patient_data,
+            _get_feature_meta,
+            _load_graphsage_artifacts,
+        )
+
+        artifacts = _load_graphsage_artifacts()
+        feature_meta = _get_feature_meta(artifacts)
+        x = _feature_vector_from_patient_data(dict(patient_data), feature_meta)
+        vec = x.numpy().flatten()
+    except Exception as e:
+        logger.warning("Could not get scenario feature vector: %s", e)
+        vec = None
+
+    top_features: List[Dict[str, Any]] = []
+    if vec is not None and len(names) <= len(vec):
+        for i, name in enumerate(names):
+            if i >= len(vec):
+                break
+            w = FEATURE_WEIGHTS.get(name, 0.05)
+            contrib = abs(float(vec[i])) * w
+            value = patient_data.get(name)
+            top_features.append(
+                {
+                    "name": name,
+                    "importance": round(contrib, 4),
+                    "value": "" if value is None else str(value),
+                }
+            )
+        top_features.sort(key=lambda t: t["importance"], reverse=True)
+        top_features = top_features[:8]
+    else:
+        for name in names[:6]:
+            w = FEATURE_WEIGHTS.get(name, 0.1)
+            value = patient_data.get(name)
+            top_features.append(
+                {
+                    "name": name,
+                    "importance": round(w, 4),
+                    "value": "" if value is None else str(value),
+                }
+            )
+
+    risk_score = prediction.get("risk_score", 0)
+    if risk_score >= 0.6:
+        risk_explanation = (
+            "Scenario risk remains elevated based on the modified GraphSAGE input profile. "
+            "The most influential modeled inputs are listed below."
+        )
+    elif risk_score >= 0.3:
+        risk_explanation = (
+            "Scenario risk is in the moderate range. The top modeled inputs below had the "
+            "largest effect on the updated prediction."
+        )
+    else:
+        risk_explanation = (
+            "Scenario risk is in the lower range based on the updated feature profile. "
+            "The listed inputs had the strongest influence on the revised prediction."
+        )
+
+    return {
+        "risk_explanation": risk_explanation,
+        "top_features": top_features,
+        "graph_context_summary": (
+            "Scenario explanation uses the same GraphSAGE feature normalization path as inference. "
+            "Importance values are heuristic when instance-level GNN explanation is not run."
+        ),
+        "method": "feature_importance",
+    }

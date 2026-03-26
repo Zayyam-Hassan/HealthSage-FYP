@@ -21,7 +21,10 @@ import {
   type DoctorAssignmentRequest,
 } from '@/services/doctors';
 import { patientsService, type Patient } from '@/services/patients';
-import { reportsService, type Report } from '@/services/reports';
+import {
+  reportsService,
+  type ReportOverviewResponse,
+} from '@/services/reports';
 import {
   treatmentService,
   type PatientTreatmentOverview,
@@ -130,7 +133,7 @@ export default function HomeScreen() {
   const [myPatients, setMyPatients] = useState<Patient[]>([]);
   const [requests, setRequests] = useState<DoctorAssignmentRequest[]>([]);
   const [myProfile, setMyProfile] = useState<Patient | null>(null);
-  const [reports, setReports] = useState<Report[]>([]);
+  const [reportOverview, setReportOverview] = useState<ReportOverviewResponse | null>(null);
   const [treatmentOverview, setTreatmentOverview] =
     useState<PatientTreatmentOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -155,20 +158,20 @@ export default function HomeScreen() {
         setRequests(requestsRes.items);
         setPopularDoctors([]);
         setMyProfile(null);
-        setReports([]);
+        setReportOverview(null);
         setTreatmentOverview(null);
       } else {
         const [appointmentRes, doctorsRes, profile, reportsRes, treatmentRes] = await Promise.all([
           appointmentsService.getPatientAppointments({ limit: 5 }),
           doctorsService.getDoctors({ page: 1, limit: 6 }),
           patientsService.getMyPatientProfile().catch(() => null),
-          reportsService.getReports({ page: 1, limit: 5 }),
+          reportsService.getPatientReportsOverview().catch(() => null),
           treatmentService.getPatientTreatmentOverview().catch(() => null),
         ]);
         setAppointments(appointmentRes.items);
         setPopularDoctors(doctorsRes.items);
         setMyProfile(profile);
-        setReports(reportsRes.items);
+        setReportOverview(reportsRes);
         setTreatmentOverview(treatmentRes);
         setMyPatients([]);
         setRequests([]);
@@ -357,6 +360,25 @@ export default function HomeScreen() {
             </View>
           )}
 
+          {userRole === 'doctor' && (
+            <View className="mb-5">
+              <View className="flex-row items-center justify-between mb-3">
+                <Text className="text-xl font-bold text-text">Patient reports</Text>
+                <TouchableOpacity onPress={() => router.push('/reports' as any)}>
+                  <Text className="text-sm font-semibold text-primary">Open workspace</Text>
+                </TouchableOpacity>
+              </View>
+              <Card className="border border-border">
+                <Text className="text-base font-semibold text-text mb-1">
+                  Uploaded and system-generated reports
+                </Text>
+                <Text className="text-sm text-text-secondary leading-5">
+                  Pick an assigned patient to upload shared documents or create risk, treatment, and overview reports in clearly separate sections.
+                </Text>
+              </Card>
+            </View>
+          )}
+
           {userRole === 'patient' && popularDoctors.length > 0 && (
             <View className="mb-5">
               <View className="flex-row items-center justify-between mb-3">
@@ -486,41 +508,68 @@ export default function HomeScreen() {
           {userRole === 'patient' && (
             <View className="mb-5">
               <View className="flex-row items-center justify-between mb-3">
-                <Text className="text-xl font-bold text-text">Latest reports</Text>
+                <Text className="text-xl font-bold text-text">Reports</Text>
                 <TouchableOpacity onPress={() => router.push('/reports' as any)}>
                   <Text className="text-sm font-semibold text-primary">View all</Text>
                 </TouchableOpacity>
               </View>
-              {reports.length === 0 ? (
+              {(!reportOverview?.uploaded_reports?.length &&
+                !reportOverview?.generated_reports?.length) ? (
                 <Card>
                   <Text className="text-sm text-text-secondary">
-                    Reports shared by your doctor will appear here.
+                    Uploaded documents and generated reports will appear here.
                   </Text>
                 </Card>
               ) : (
-                reports.slice(0, 2).map((report) => (
-                  <TouchableOpacity
-                    key={report.id}
-                    activeOpacity={0.85}
-                    onPress={() => router.push(`/reports/${report.id}` as any)}
-                  >
-                    <Card className="mb-3 border border-border">
-                      <Text className="text-base font-semibold text-text mb-1">
-                        {report.title}
-                      </Text>
-                      <Text className="text-sm text-text-secondary mb-2">
-                        {formatDate(report.generated_at)}
-                      </Text>
-                      <Text className="text-sm text-text-secondary leading-5">
-                        {String(
-                          (report.content as any)?.latest_risk_summary ||
-                            (report.content as any)?.overview ||
-                            'Open this report to review the care summary.',
-                        )}
-                      </Text>
-                    </Card>
-                  </TouchableOpacity>
-                ))
+                <View>
+                  {reportOverview?.uploaded_reports?.slice(0, 1).map((report) => (
+                    <TouchableOpacity
+                      key={report.id}
+                      activeOpacity={0.85}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/reports/[id]',
+                          params: { id: report.id, kind: 'uploaded' },
+                        } as any)
+                      }
+                    >
+                      <Card className="mb-3 border border-border">
+                        <Text className="text-base font-semibold text-text mb-1">
+                          Uploaded report
+                        </Text>
+                        <Text className="text-sm font-semibold text-text">{report.title}</Text>
+                        <Text className="text-sm text-text-secondary mt-1">
+                          {report.category.replace(/_/g, ' ')} • {formatDate(report.created_at)}
+                        </Text>
+                      </Card>
+                    </TouchableOpacity>
+                  ))}
+                  {reportOverview?.generated_reports?.slice(0, 1).map((report) => (
+                    <TouchableOpacity
+                      key={report.id}
+                      activeOpacity={0.85}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/reports/[id]',
+                          params: { id: report.id, kind: 'generated' },
+                        } as any)
+                      }
+                    >
+                      <Card className="mb-3 border border-border">
+                        <Text className="text-base font-semibold text-text mb-1">
+                          Generated report
+                        </Text>
+                        <Text className="text-sm font-semibold text-text">{report.title}</Text>
+                        <Text className="text-sm text-text-secondary mt-1">
+                          {formatDate(report.created_at)}
+                        </Text>
+                        <Text className="mt-2 text-sm text-text-secondary leading-5">
+                          {report.summary || 'Open this report to review the structured summary.'}
+                        </Text>
+                      </Card>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               )}
             </View>
           )}
