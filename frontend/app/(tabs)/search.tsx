@@ -61,7 +61,7 @@ export default function SearchTabScreen() {
           {
             id: 'patients',
             title: `${summary.patients} active patients`,
-            body: 'Open the patient panel to review assignments and confirmations.',
+            body: 'Open the patient panel to review assignments and linked scheduling activity.',
             route: '/patients',
           },
           {
@@ -76,7 +76,7 @@ export default function SearchTabScreen() {
             id: 'doctor',
             title: summary.assignedDoctor || `${summary.doctors} doctors available`,
             body: summary.assignedDoctor
-              ? 'Your doctor is linked. You can still review the directory.'
+              ? 'Your doctor is linked. Open scheduling to book a live slot.'
               : 'Browse the directory and request a doctor.',
             route: '/psychiatrist',
           },

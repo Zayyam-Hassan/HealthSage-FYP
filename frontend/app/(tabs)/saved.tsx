@@ -23,9 +23,12 @@ export default function SavedScreen() {
   const loadRecords = async () => {
     try {
       const currentUser = await authService.getCurrentUser();
-      setRole(currentUser?.role ?? null);
+      const currentRole = currentUser?.role ?? null;
+      setRole(currentRole);
       const [appointmentRes, reportRes] = await Promise.all([
-        appointmentsService.getAppointments({ limit: 50 }),
+        currentRole === 'doctor'
+          ? appointmentsService.getDoctorAppointments({ limit: 50 })
+          : appointmentsService.getPatientAppointments({ limit: 50 }),
         reportsService.getReports({ limit: 50 }),
       ]);
       setAppointments(appointmentRes.items);
@@ -61,7 +64,7 @@ export default function SavedScreen() {
         <Card className="mb-4 bg-primary/5 border border-primary/20">
           <Text className="text-xl font-bold text-text mb-1">Records</Text>
           <Text className="text-sm text-text-secondary">
-            Review appointment requests and generated care reports in one place.
+            Review scheduled appointments and generated care reports in one place.
           </Text>
         </Card>
         <View className="flex-row bg-bg-secondary rounded-xl p-1">
@@ -96,16 +99,16 @@ export default function SavedScreen() {
             renderItem={({ item }) => (
               <View className="px-6">
                 <AppointmentCard
-                  date={item.display_date || 'Pending confirmation'}
+                  date={item.display_date || 'Scheduled'}
                   time={item.display_time || item.status}
-                  doctorName={item.counterpart_name || 'Appointment request'}
+                  doctorName={item.counterpart_name || 'Appointment'}
                   specialty={item.reason}
                   status={
                     item.status === 'completed'
                       ? 'completed'
-                      : item.status === 'rejected' || item.status === 'cancelled'
+                      : item.status === 'cancelled'
                         ? 'cancelled'
-                        : 'upcoming'
+                        : 'booked'
                   }
                   onPress={() => router.push(`/appointments/${item.id}` as any)}
                 />
@@ -118,11 +121,11 @@ export default function SavedScreen() {
             title="No appointments yet"
             message={
               role === 'patient'
-                ? 'Your appointment requests and confirmations will appear here.'
-                : 'Patient appointment requests and confirmations will appear here.'
+                ? 'Your confirmed and completed appointments will appear here.'
+                : 'Patient bookings and follow-up updates will appear here.'
             }
-            actionLabel={role === 'patient' ? 'Request appointment' : undefined}
-            onActionPress={role === 'patient' ? () => router.push('/appointments/book' as any) : undefined}
+            actionLabel={role === 'patient' ? 'Open scheduling' : undefined}
+            onActionPress={role === 'patient' ? () => router.push('/appointments' as any) : undefined}
           />
         )
       ) : reports.length > 0 ? (

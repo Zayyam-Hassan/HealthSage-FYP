@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, ScrollView, Text, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, ScrollView, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Header from '@/components/Header';
@@ -10,6 +10,7 @@ import Button from '@/components/Button';
 import SectionHeader from '@/components/SectionHeader';
 import RiskIndicator from '@/components/RiskIndicator';
 import Loader from '@/components/Loader';
+import { authService, type UserRole } from '@/services/auth';
 import { patientsService, Patient } from '@/services/patients';
 import { aiResultsService } from '@/services/aiResults';
 import type { RiskPrediction } from '@/constants/mockRisk';
@@ -19,12 +20,28 @@ export default function PatientDetailsScreen() {
   const router = useRouter();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [riskData, setRiskData] = useState<RiskPrediction | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadPatient();
+  const loadPatient = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await patientsService.getPatient(id as string);
+      setPatient(data);
+    } catch (err: any) {
+      console.error('Error loading patient:', err);
+      setError(err.message || 'Failed to load patient');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    authService.getCurrentUser().then((user) => setRole(user?.role ?? null));
+    loadPatient();
+  }, [loadPatient]);
 
   useEffect(() => {
     if (!patient?.id) return;
@@ -50,20 +67,6 @@ export default function PatientDetailsScreen() {
       cancelled = true;
     };
   }, [patient?.id]);
-
-  const loadPatient = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await patientsService.getPatient(id as string);
-      setPatient(data);
-    } catch (err: any) {
-      console.error('Error loading patient:', err);
-      setError(err.message || 'Failed to load patient');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -298,6 +301,15 @@ export default function PatientDetailsScreen() {
             >
               Edit Patient
             </Button>
+            {role === 'doctor' ? (
+              <Button
+                variant="primary"
+                onPress={() => router.push(`/patients/${patient.id}/treatment` as any)}
+                className="flex-1"
+              >
+                Treatment Plan
+              </Button>
+            ) : null}
           </View>
         </View>
       </ScrollView>

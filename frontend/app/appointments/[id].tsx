@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
-import AppDialog from '@/components/AppDialog';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
@@ -11,18 +10,25 @@ import Loader from '@/components/Loader';
 import { appointmentsService, type Appointment } from '@/services/appointments';
 import { authService, type UserRole } from '@/services/auth';
 
+function getBadgeVariant(status: string) {
+  switch (status) {
+    case 'completed':
+      return 'success' as const;
+    case 'cancelled':
+      return 'error' as const;
+    case 'no_show':
+      return 'warning' as const;
+    default:
+      return 'info' as const;
+  }
+}
+
 export default function AppointmentDetailsScreen() {
   const { id } = useLocalSearchParams();
   const [role, setRole] = useState<UserRole | null>(null);
   const [appointment, setAppointment] = useState<Appointment | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dialog, setDialog] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    actions?: { label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'danger' }[];
-  }>({ visible: false, title: '', message: '' });
+  const [saving, setSaving] = useState(false);
 
   const loadAppointment = useCallback(async () => {
     try {
@@ -31,7 +37,6 @@ export default function AppointmentDetailsScreen() {
       setRole(currentUser?.role ?? null);
       const data = await appointmentsService.getAppointment(id as string);
       setAppointment(data);
-      setSelectedSlot(data.scheduled_at ?? null);
     } finally {
       setLoading(false);
     }
@@ -41,46 +46,36 @@ export default function AppointmentDetailsScreen() {
     loadAppointment();
   }, [loadAppointment]);
 
-  const acceptSelectedSlot = async () => {
-    if (!appointment || !selectedSlot) {
-      setDialog({
-        visible: true,
-        title: 'Select a time',
-        message: 'Choose one proposed time before accepting.',
-      });
-      return;
-    }
+  const cancelAppointment = async () => {
+    if (!appointment) return;
 
-    setDialog({
-      visible: true,
-      title: 'Accept appointment',
-      message: `Confirm ${new Date(selectedSlot).toLocaleString()} as the appointment time?`,
-      actions: [
-        { label: 'No', onPress: () => {}, variant: 'secondary' },
-        {
-          label: 'Yes, accept',
-          onPress: async () => {
-            try {
-              await appointmentsService.updateAppointment(appointment.id, {
-                selected_slot: selectedSlot,
-              });
-              setDialog({
-                visible: true,
-                title: 'Appointment confirmed',
-                message: 'The selected time has been confirmed.',
-              });
-              await loadAppointment();
-            } catch (error: any) {
-              setDialog({
-                visible: true,
-                title: 'Unable to confirm',
-                message: error.message || 'Please try again.',
-              });
-            }
-          },
-        },
-      ],
-    });
+    try {
+      setSaving(true);
+      if (role === 'doctor') {
+        await appointmentsService.cancelDoctorAppointment(appointment.id);
+      } else {
+        await appointmentsService.cancelPatientAppointment(appointment.id);
+      }
+      await loadAppointment();
+    } catch (err: any) {
+      Alert.alert('Unable to cancel', err.message || 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const completeAppointment = async () => {
+    if (!appointment) return;
+
+    try {
+      setSaving(true);
+      await appointmentsService.completeDoctorAppointment(appointment.id);
+      await loadAppointment();
+    } catch (err: any) {
+      Alert.alert('Unable to complete', err.message || 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading || !appointment) {
@@ -94,143 +89,71 @@ export default function AppointmentDetailsScreen() {
     );
   }
 
-  const canRespond =
-    appointment.status === 'pending' &&
-    appointment.requested_by_role !== role;
+  const counterpart =
+    role === 'doctor' ? appointment.patient_name : appointment.doctor_name;
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      <AppDialog
-        visible={dialog.visible}
-        title={dialog.title}
-        message={dialog.message}
-        actions={dialog.actions}
-        onClose={() => setDialog((current) => ({ ...current, visible: false }))}
-      />
       <Header title="Appointment Details" showBack />
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 28 }}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 28 }}
       >
         <View className="px-6 pt-4">
-          <Card className="mb-4">
-            <View className="flex-row items-center justify-between mb-3">
+          <Card className="mb-4 border border-border">
+            <View className="mb-3 flex-row items-center justify-between">
               <Text className="text-lg font-bold text-text">
-                {appointment.counterpart_name || 'Appointment request'}
+                {counterpart || 'Appointment'}
               </Text>
-              <Badge variant={appointment.status === 'confirmed' ? 'success' : 'warning'}>
+              <Badge variant={getBadgeVariant(appointment.status)}>
                 {appointment.status.toUpperCase()}
               </Badge>
             </View>
-            <Text className="text-sm text-text-secondary mb-2">
-              Requested by {appointment.requested_by_role}
+            <Text className="mb-1 text-sm text-text-secondary">
+              {appointment.display_date} at {appointment.display_time}
             </Text>
-            <Text className="text-base text-text">{appointment.reason}</Text>
+            <Text className="text-base text-text">
+              {appointment.reason_for_visit || 'General consultation'}
+            </Text>
           </Card>
 
-          <Card className="mb-4">
-            <Text className="text-base font-semibold text-text mb-3">
-              Proposed slots
+          <Card className="mb-4 border border-border">
+            <Text className="mb-3 text-base font-semibold text-text">
+              Booking summary
             </Text>
-            {appointment.proposed_slots.map((slot) => (
-              <TouchableOpacity
-                key={slot}
-                disabled={!canRespond}
-                onPress={() => setSelectedSlot(slot)}
-                className={`mb-3 p-4 rounded-xl border ${
-                  (appointment.scheduled_at || selectedSlot) === slot
-                    ? 'border-primary bg-primary/10'
-                    : 'border-border bg-background'
-                }`}
-              >
-                <Text className="text-sm font-semibold text-text">
-                  {new Date(slot).toLocaleString()}
-                </Text>
-                {canRespond ? (
-                  <Text className="text-xs text-primary mt-1">
-                    Tap to select this slot
-                  </Text>
-                ) : null}
-              </TouchableOpacity>
-            ))}
-          </Card>
-
-          {appointment.scheduled_at ? (
-            <Card className="mb-4 bg-primary/5 border border-primary/20">
-              <Text className="text-base font-semibold text-text mb-1">
-                Confirmed appointment
+            <Text className="mb-2 text-sm text-text-secondary">
+              Slot status: {appointment.slot?.status || 'unknown'}
+            </Text>
+            <Text className="mb-2 text-sm text-text-secondary">
+              Booked at: {new Date(appointment.booked_at).toLocaleString()}
+            </Text>
+            {appointment.patient_note ? (
+              <Text className="mb-2 text-sm text-text-secondary">
+                Patient note: {appointment.patient_note}
               </Text>
-              <Text className="text-sm text-text-secondary">
-                {new Date(appointment.scheduled_at).toLocaleString()}
-              </Text>
-            </Card>
-          ) : null}
-
-          <View className="flex-row">
-            <Button
-              variant="outline"
-              className="flex-1 mr-2"
-              onPress={() =>
-                setDialog({
-                  visible: true,
-                  title: 'Cancel appointment',
-                  message: 'Do you want to cancel this appointment?',
-                  actions: [
-                    { label: 'No', onPress: () => {}, variant: 'secondary' },
-                    {
-                      label: 'Yes, cancel',
-                      variant: 'danger',
-                      onPress: async () => {
-                        await appointmentsService.updateAppointment(appointment.id, {
-                          status: 'cancelled',
-                        });
-                        await loadAppointment();
-                      },
-                    },
-                  ],
-                })
-              }
-            >
-              Cancel
-            </Button>
-            {canRespond ? (
-              <Button
-                className="flex-1"
-                onPress={acceptSelectedSlot}
-              >
-                Accept
-              </Button>
             ) : null}
-          </View>
+            {appointment.doctor_note ? (
+              <Text className="text-sm text-text-secondary">
+                Doctor note: {appointment.doctor_note}
+              </Text>
+            ) : null}
+          </Card>
 
-          {canRespond ? (
-            <View className="mt-3">
+          {appointment.status === 'booked' ? (
+            <View className="flex-row">
               <Button
                 variant="outline"
-                fullWidth
-                onPress={() =>
-                  setDialog({
-                    visible: true,
-                    title: 'Reject appointment',
-                    message: 'Do you want to reject this appointment request?',
-                    actions: [
-                      { label: 'No', onPress: () => {}, variant: 'secondary' },
-                      {
-                        label: 'Yes, reject',
-                        variant: 'danger',
-                        onPress: async () => {
-                          await appointmentsService.updateAppointment(appointment.id, {
-                            status: 'rejected',
-                          });
-                          await loadAppointment();
-                        },
-                      },
-                    ],
-                  })
-                }
+                className={role === 'doctor' ? 'mr-2 flex-1' : 'flex-1'}
+                onPress={cancelAppointment}
+                loading={saving}
               >
-                Reject request
+                Cancel
               </Button>
+              {role === 'doctor' ? (
+                <Button className="flex-1" onPress={completeAppointment} loading={saving}>
+                  Complete
+                </Button>
+              ) : null}
             </View>
           ) : null}
         </View>

@@ -16,6 +16,8 @@ import { reportsRouter } from './routes/reports';
 import { medicationsRouter } from './routes/medications';
 import { chatbotRouter } from './routes/chatbot';
 import { compatibilityRouter } from './routes/compatibility';
+import { schedulingRouter } from './routes/scheduling';
+import { treatmentRouter } from './routes/treatment';
 
 const app = express();
 
@@ -54,6 +56,8 @@ app.use('/api/v1/mongo/doctors', doctorsRouter);
 app.use('/api/v1/mongo/appointments', appointmentsRouter);
 app.use('/api/v1/mongo/reports', reportsRouter);
 app.use('/api/v1/mongo/medications', medicationsRouter);
+app.use('/api/v1/scheduling', schedulingRouter);
+app.use('/api/v1/treatment', treatmentRouter);
 app.use('/api/v1/compatibility', compatibilityRouter);
 app.use('/api/v1/risk', riskRouter);
 app.use('/api/v1/chatbot', chatbotRouter);

@@ -29,7 +29,7 @@ const doctorLinks: DashboardLink[] = [
   {
     id: 'appointments',
     title: 'Appointments',
-    description: 'Track consultation schedules and updates.',
+    description: 'Manage availability, slots, and confirmed bookings.',
     route: '/appointments',
   },
   {
@@ -58,6 +58,12 @@ const patientLinks: DashboardLink[] = [
     title: 'Reports',
     description: 'Review your saved medical reports.',
     route: '/reports',
+  },
+  {
+    id: 'appointments',
+    title: 'Scheduling',
+    description: 'Browse available slots and book instantly.',
+    route: '/appointments',
   },
   {
     id: 'chatbot',
@@ -92,8 +98,8 @@ export default function DashboardScreen() {
             </Text>
             <Text className="text-sm text-text-secondary leading-5">
               {role === 'doctor'
-                ? 'Your routes are tailored to patient oversight, confirmations, and explainable prediction.'
-                : 'Your routes are tailored to profile updates, doctor selection, and personal care tracking.'}
+                ? 'Your routes are tailored to patient oversight, live scheduling, and explainable prediction.'
+                : 'Your routes are tailored to profile updates, doctor selection, instant booking, and personal care tracking.'}
             </Text>
           </Card>
 

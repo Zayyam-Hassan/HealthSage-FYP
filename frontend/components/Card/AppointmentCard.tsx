@@ -7,7 +7,14 @@ interface AppointmentCardProps {
   time: string;
   doctorName: string;
   specialty: string;
-  status: 'upcoming' | 'completed' | 'cancelled';
+  status:
+    | 'available'
+    | 'booked'
+    | 'blocked'
+    | 'cancelled'
+    | 'completed'
+    | 'no_show'
+    | 'upcoming';
   onPress?: () => void;
 }
 
@@ -20,16 +27,26 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({
   onPress,
 }) => {
   const statusColors = {
+    available: 'bg-success/10',
+    booked: 'bg-info/10',
+    blocked: 'bg-warning/10',
+    no_show: 'bg-warning/10',
     upcoming: 'bg-info/10',
     completed: 'bg-success/10',
     cancelled: 'bg-error/10',
   };
 
   const statusTextColors = {
+    available: 'text-success',
+    booked: 'text-info',
+    blocked: 'text-warning',
+    no_show: 'text-warning',
     upcoming: 'text-info',
     completed: 'text-success',
     cancelled: 'text-error',
   };
+
+  const statusLabel = status.replace('_', ' ');
 
   return (
     <Card onPress={onPress} className="mb-4 border border-border/50">
@@ -40,7 +57,7 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({
         </View>
         <View className={`px-3 py-1.5 rounded-full ${statusColors[status]} shadow-sm`}>
           <Text className={`text-xs font-semibold capitalize ${statusTextColors[status]}`}>
-            {status}
+            {statusLabel}
           </Text>
         </View>
       </View>
