@@ -220,7 +220,7 @@ export default function PatientWhatIfScreen() {
       setDialog({
         visible: true,
         title: 'No changes detected',
-        message: 'Adjust at least one feature from the baseline to run a what-if scenario.',
+        message: 'Adjust at least one feature from the patient’s current metrics to run a what-if scenario.',
       });
       return;
     }
@@ -356,14 +356,14 @@ export default function PatientWhatIfScreen() {
                   }
                   type={field.input_type === 'number' ? 'number' : 'text'}
                   error={fieldErrors[field.field]}
-                  helperText={`Baseline: ${formatFieldValue(field.baseline_value, field.unit)}`}
+                  helperText={`Current patient metric: ${formatFieldValue(field.baseline_value, field.unit)}`}
                 />
               </View>
             ))}
 
             <View className="flex-row items-center justify-between mb-4">
               <Text className="text-sm text-text-secondary">
-                {changedCount} feature{changedCount === 1 ? '' : 's'} changed from baseline
+                {changedCount} feature{changedCount === 1 ? '' : 's'} changed from current patient metrics
               </Text>
               <Text className="text-xs uppercase tracking-[0.8px] text-text-secondary">
                 Simulation only
@@ -374,7 +374,7 @@ export default function PatientWhatIfScreen() {
               Run What-If Analysis
             </Button>
             <Button variant="outline" onPress={resetToBaseline} fullWidth>
-              Reset to Baseline
+              Reset to Patient Metrics
             </Button>
           </Card>
 

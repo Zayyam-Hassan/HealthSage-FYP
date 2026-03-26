@@ -164,6 +164,42 @@ def _patient_data_from_mongo(patient_id: str) -> Dict[str, Any]:
     return data
 
 
+def get_patient_actual_metrics(patient_id: str) -> Dict[str, Any]:
+    """
+    Return patient metrics as currently recorded in Mongo, without converting them
+    into training units. This is intended for clinician-facing forms and displays.
+    """
+    db = get_db()
+    oid = parse_patient_oid(patient_id)
+    patient = db.patients.find_one({"_id": oid})
+    if not patient:
+        raise ValueError(f"Patient {patient_id} not found")
+
+    lab_tests = patient.get("lab_tests") or {}
+    vital_signs = patient.get("vital_signs") or {}
+    lifestyle = patient.get("lifestyle") or {}
+
+    return {
+        "HBA1C": lab_tests.get("hba1c"),
+        "FASTING_GLUCOSE": lab_tests.get("fasting_glucose"),
+        "RANDOM_GLUCOSE": lab_tests.get("glucose"),
+        "BMI": vital_signs.get("bmi"),
+        "SYSTOLIC_BP": vital_signs.get("systolic_bp"),
+        "DIASTOLIC_BP": vital_signs.get("diastolic_bp"),
+        "TOTAL_CHOLESTEROL": lab_tests.get("cholesterol"),
+        "HDL": lab_tests.get("hdl"),
+        "LDL": lab_tests.get("ldl"),
+        "TRIGLYCERIDES": lab_tests.get("triglycerides"),
+        "AGE": patient.get("age"),
+        "SEX": patient.get("sex"),
+        "HEIGHT_CM": patient.get("height_cm"),
+        "WEIGHT_KG": patient.get("weight_kg"),
+        "SMOKING": lifestyle.get("smoking"),
+        "DRINKING": lifestyle.get("drinking"),
+        "EXERCISE": lifestyle.get("exercise"),
+    }
+
+
 # Training units (from feature_means_train in v2 artifacts): HBA1C %, glucose mg/dL, BP mmHg,
 # lipids mmol/L, BMI kg/m², AGE years, SEX 0/1, HEIGHT_CM cm, WEIGHT_KG kg.
 def _convert_units_to_training_standard(data: Dict[str, Any]) -> None:

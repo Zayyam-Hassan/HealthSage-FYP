@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Tuple
 
 from services.prediction.service import (
     build_graphsage_patient_data,
+    get_patient_actual_metrics,
     predict_graphsage_from_patient_data,
 )
 from services.risk.graph_explainer import explain_risk_from_patient_data
@@ -181,16 +182,20 @@ def apply_modifications(patient_data: Dict[str, Any], modifications: Dict[str, A
     return updated
 
 
-def build_snapshot(patient_data: Dict[str, Any], raw_prediction: Dict[str, Any]) -> Dict[str, Any]:
+def build_snapshot(
+    model_patient_data: Dict[str, Any],
+    raw_prediction: Dict[str, Any],
+    display_patient_data: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
     score, label = normalize_prediction(raw_prediction)
     explanation = explain_risk_from_patient_data(
-        patient_data,
+        model_patient_data,
         {"risk_score": score, "risk_label": label},
     )
     return {
         "risk_score": round(score, 4),
         "risk_label": label,
-        "features": to_public_features(patient_data),
+        "features": to_public_features(display_patient_data or model_patient_data),
         "top_features": explanation.get("top_features", []),
     }
 
@@ -235,11 +240,12 @@ def build_analysis(
 
 def build_baseline_response(patient_id: str) -> Dict[str, Any]:
     patient_data = build_graphsage_patient_data(patient_id)
+    actual_metrics = get_patient_actual_metrics(patient_id)
     baseline_raw = predict_graphsage_from_patient_data(patient_data, patient_id=patient_id)
     return {
         "patient_id": patient_id,
-        "baseline": build_snapshot(patient_data, baseline_raw),
-        "modifiable_fields": to_modifiable_fields(patient_data),
+        "baseline": build_snapshot(patient_data, baseline_raw, display_patient_data=actual_metrics),
+        "modifiable_fields": to_modifiable_fields(actual_metrics),
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -252,13 +258,23 @@ def compare_patient_scenario(
     if not modifications:
         raise ValueError("modifications must not be empty")
 
-    patient_data = build_graphsage_patient_data(patient_id)
-    baseline_raw = predict_graphsage_from_patient_data(patient_data, patient_id=patient_id)
-    scenario_data = apply_modifications(patient_data, modifications)
-    scenario_raw = predict_graphsage_from_patient_data(scenario_data, patient_id=patient_id)
+    model_patient_data = build_graphsage_patient_data(patient_id)
+    actual_metrics = get_patient_actual_metrics(patient_id)
+    baseline_raw = predict_graphsage_from_patient_data(model_patient_data, patient_id=patient_id)
+    scenario_model_data = apply_modifications(model_patient_data, modifications)
+    scenario_display_data = apply_modifications(actual_metrics, modifications)
+    scenario_raw = predict_graphsage_from_patient_data(scenario_model_data, patient_id=patient_id)
 
-    baseline = build_snapshot(patient_data, baseline_raw)
-    scenario = build_snapshot(scenario_data, scenario_raw)
+    baseline = build_snapshot(
+        model_patient_data,
+        baseline_raw,
+        display_patient_data=actual_metrics,
+    )
+    scenario = build_snapshot(
+        scenario_model_data,
+        scenario_raw,
+        display_patient_data=scenario_display_data,
+    )
     changes = [
         {
             "feature": field,
