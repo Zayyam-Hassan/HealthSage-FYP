@@ -14,10 +14,8 @@ import { authService } from '@/services/auth';
 import { patientsService, type Patient } from '@/services/patients';
 import {
   treatmentService,
-  type LifestylePlan,
-  type LifestylePlanPayload,
-  type Prescription,
-  type PrescriptionPayload,
+  type DoctorTreatmentPlan,
+  type DoctorTreatmentPlanPayload,
 } from '@/services/treatment';
 
 type MedicationFormItem = {
@@ -30,11 +28,32 @@ type MedicationFormItem = {
   special_instructions: string;
 };
 
+type TreatmentPlanForm = {
+  assessment: {
+    diagnosis: string;
+    clinical_impression: string;
+    risk_assessment: string;
+    treatment_goal: string;
+    follow_up_note: string;
+    rationale: string;
+  };
+  medications: MedicationFormItem[];
+  lifestyle_plan: {
+    diet_plan: string;
+    exercise_plan: string;
+    sleep_guidance: string;
+    stress_guidance: string;
+    monitoring_guidance: string;
+    general_lifestyle_note: string;
+  };
+  doctor_note: string;
+};
+
 type DialogState = {
   visible: boolean;
   title: string;
   message: string;
-  onConfirm?: () => void;
+  onConfirm?: () => void | Promise<void>;
 };
 
 const emptyMedication = (): MedicationFormItem => ({
@@ -47,15 +66,26 @@ const emptyMedication = (): MedicationFormItem => ({
   special_instructions: '',
 });
 
-const emptyLifestyleForm: LifestylePlanPayload = {
-  diet_plan: '',
-  exercise_plan: '',
-  sleep_guidance: '',
-  stress_guidance: '',
-  monitoring_guidance: '',
-  follow_up_note: '',
-  general_note: '',
-};
+const emptyForm = (): TreatmentPlanForm => ({
+  assessment: {
+    diagnosis: '',
+    clinical_impression: '',
+    risk_assessment: '',
+    treatment_goal: '',
+    follow_up_note: '',
+    rationale: '',
+  },
+  medications: [emptyMedication()],
+  lifestyle_plan: {
+    diet_plan: '',
+    exercise_plan: '',
+    sleep_guidance: '',
+    stress_guidance: '',
+    monitoring_guidance: '',
+    general_lifestyle_note: '',
+  },
+  doctor_note: '',
+});
 
 function formatDateTime(value?: string | null) {
   if (!value) return 'Not recorded';
@@ -74,21 +104,20 @@ function getStatusVariant(status: string) {
   return 'warning' as const;
 }
 
-function toPrescriptionForm(prescription: Prescription | null) {
-  if (!prescription) {
-    return {
-      diagnosis_context: '',
-      general_note: '',
-      medications: [emptyMedication()],
-    };
-  }
-
+function toForm(plan: DoctorTreatmentPlan | null): TreatmentPlanForm {
+  if (!plan) return emptyForm();
   return {
-    diagnosis_context: prescription.diagnosis_context ?? '',
-    general_note: prescription.general_note ?? '',
+    assessment: {
+      diagnosis: plan.assessment.diagnosis ?? '',
+      clinical_impression: plan.assessment.clinical_impression ?? '',
+      risk_assessment: plan.assessment.risk_assessment ?? '',
+      treatment_goal: plan.assessment.treatment_goal ?? '',
+      follow_up_note: plan.assessment.follow_up_note ?? '',
+      rationale: plan.assessment.rationale ?? '',
+    },
     medications:
-      prescription.medications.length > 0
-        ? prescription.medications.map((item) => ({
+      plan.medications.length > 0
+        ? plan.medications.map((item) => ({
             medication_name: item.medication_name,
             dosage: item.dosage,
             frequency: item.frequency,
@@ -98,37 +127,30 @@ function toPrescriptionForm(prescription: Prescription | null) {
             special_instructions: item.special_instructions ?? '',
           }))
         : [emptyMedication()],
+    lifestyle_plan: {
+      diet_plan: plan.lifestyle_plan.diet_plan ?? '',
+      exercise_plan: plan.lifestyle_plan.exercise_plan ?? '',
+      sleep_guidance: plan.lifestyle_plan.sleep_guidance ?? '',
+      stress_guidance: plan.lifestyle_plan.stress_guidance ?? '',
+      monitoring_guidance: plan.lifestyle_plan.monitoring_guidance ?? '',
+      general_lifestyle_note: plan.lifestyle_plan.general_lifestyle_note ?? '',
+    },
+    doctor_note: plan.doctor_note ?? '',
   };
 }
 
-function toLifestyleForm(plan: LifestylePlan | null): LifestylePlanPayload {
-  if (!plan) {
-    return { ...emptyLifestyleForm };
-  }
-
-  return {
-    diet_plan: plan.diet_plan ?? '',
-    exercise_plan: plan.exercise_plan ?? '',
-    sleep_guidance: plan.sleep_guidance ?? '',
-    stress_guidance: plan.stress_guidance ?? '',
-    monitoring_guidance: plan.monitoring_guidance ?? '',
-    follow_up_note: plan.follow_up_note ?? '',
-    general_note: plan.general_note ?? '',
-  };
+function hasAnyMedicationValue(item: MedicationFormItem) {
+  return Object.values(item).some((value) => value.trim());
 }
 
 export default function PatientTreatmentScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
-  const [plans, setPlans] = useState<LifestylePlan[]>([]);
-  const [prescriptionForm, setPrescriptionForm] = useState(toPrescriptionForm(null));
-  const [lifestyleForm, setLifestyleForm] =
-    useState<LifestylePlanPayload>(emptyLifestyleForm);
+  const [plans, setPlans] = useState<DoctorTreatmentPlan[]>([]);
+  const [form, setForm] = useState<TreatmentPlanForm>(emptyForm);
   const [loading, setLoading] = useState(true);
-  const [savingPrescription, setSavingPrescription] = useState(false);
-  const [savingLifestyle, setSavingLifestyle] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState>({
     visible: false,
@@ -136,12 +158,12 @@ export default function PatientTreatmentScreen() {
     message: '',
   });
 
-  const activePrescription = useMemo(
-    () => prescriptions.find((item) => item.status === 'active') ?? null,
-    [prescriptions],
-  );
-  const activeLifestylePlan = useMemo(
+  const activePlan = useMemo(
     () => plans.find((item) => item.status === 'active') ?? null,
+    [plans],
+  );
+  const history = useMemo(
+    () => plans.filter((item) => item.status !== 'active'),
     [plans],
   );
 
@@ -150,34 +172,23 @@ export default function PatientTreatmentScreen() {
       setLoading(true);
       setError(null);
       const currentUser = await authService.getCurrentUser();
-      const currentRole = currentUser?.role ?? null;
-
-      if (currentRole !== 'doctor') {
-        setError('Only doctor accounts can manage treatment plans.');
+      if (currentUser?.role !== 'doctor') {
+        setError('Only doctor accounts can manage doctor-authored treatment plans.');
         return;
       }
 
       const patientId = String(id ?? '');
-      const [patientRecord, prescriptionRes, planRes] = await Promise.all([
+      const [patientRecord, plansRes] = await Promise.all([
         patientsService.getPatient(patientId),
-        treatmentService.getDoctorPatientPrescriptions(patientId),
-        treatmentService.getDoctorPatientLifestylePlans(patientId),
+        treatmentService.getDoctorTreatmentPlans(patientId),
       ]);
 
       setPatient(patientRecord);
-      setPrescriptions(prescriptionRes.items);
-      setPlans(planRes.items);
-
-      const nextActivePrescription =
-        prescriptionRes.items.find((item) => item.status === 'active') ?? null;
-      const nextActivePlan =
-        planRes.items.find((item) => item.status === 'active') ?? null;
-
-      setPrescriptionForm(toPrescriptionForm(nextActivePrescription));
-      setLifestyleForm(toLifestyleForm(nextActivePlan));
+      setPlans(plansRes.items);
+      setForm(toForm(plansRes.items.find((item) => item.status === 'active') ?? null));
     } catch (err: any) {
-      console.error('Failed to load treatment screen:', err);
-      setError(err.message || 'Unable to load treatment plans.');
+      console.error('Failed to load doctor treatment plan screen:', err);
+      setError(err.message || 'Unable to load doctor treatment plans.');
     } finally {
       setLoading(false);
     }
@@ -187,12 +198,41 @@ export default function PatientTreatmentScreen() {
     loadData();
   }, [loadData]);
 
+  const closeDialog = () =>
+    setDialog({ visible: false, title: '', message: '', onConfirm: undefined });
+
+  const setAssessmentField = (
+    field: keyof TreatmentPlanForm['assessment'],
+    value: string,
+  ) => {
+    setForm((current) => ({
+      ...current,
+      assessment: {
+        ...current.assessment,
+        [field]: value,
+      },
+    }));
+  };
+
+  const setLifestyleField = (
+    field: keyof TreatmentPlanForm['lifestyle_plan'],
+    value: string,
+  ) => {
+    setForm((current) => ({
+      ...current,
+      lifestyle_plan: {
+        ...current.lifestyle_plan,
+        [field]: value,
+      },
+    }));
+  };
+
   const setMedicationField = (
     index: number,
     field: keyof MedicationFormItem,
     value: string,
   ) => {
-    setPrescriptionForm((current) => ({
+    setForm((current) => ({
       ...current,
       medications: current.medications.map((item, itemIndex) =>
         itemIndex === index ? { ...item, [field]: value } : item,
@@ -201,14 +241,14 @@ export default function PatientTreatmentScreen() {
   };
 
   const addMedication = () => {
-    setPrescriptionForm((current) => ({
+    setForm((current) => ({
       ...current,
       medications: [...current.medications, emptyMedication()],
     }));
   };
 
   const removeMedication = (index: number) => {
-    setPrescriptionForm((current) => {
+    setForm((current) => {
       const nextItems = current.medications.filter((_, itemIndex) => itemIndex !== index);
       return {
         ...current,
@@ -217,100 +257,87 @@ export default function PatientTreatmentScreen() {
     });
   };
 
-  const closeDialog = () =>
-    setDialog({ visible: false, title: '', message: '', onConfirm: undefined });
+  const buildPayload = (): DoctorTreatmentPlanPayload => ({
+    assessment: {
+      diagnosis: form.assessment.diagnosis.trim() || undefined,
+      clinical_impression: form.assessment.clinical_impression.trim() || undefined,
+      risk_assessment: form.assessment.risk_assessment.trim() || undefined,
+      treatment_goal: form.assessment.treatment_goal.trim() || undefined,
+      follow_up_note: form.assessment.follow_up_note.trim() || undefined,
+      rationale: form.assessment.rationale.trim() || undefined,
+    },
+    medications: form.medications
+      .filter(hasAnyMedicationValue)
+      .map((item) => ({
+        medication_name: item.medication_name.trim(),
+        dosage: item.dosage.trim(),
+        frequency: item.frequency.trim(),
+        route: item.route.trim(),
+        duration: item.duration.trim(),
+        timing_instructions: item.timing_instructions.trim(),
+        special_instructions: item.special_instructions.trim() || undefined,
+      })),
+    lifestyle_plan: {
+      diet_plan: form.lifestyle_plan.diet_plan.trim() || undefined,
+      exercise_plan: form.lifestyle_plan.exercise_plan.trim() || undefined,
+      sleep_guidance: form.lifestyle_plan.sleep_guidance.trim() || undefined,
+      stress_guidance: form.lifestyle_plan.stress_guidance.trim() || undefined,
+      monitoring_guidance: form.lifestyle_plan.monitoring_guidance.trim() || undefined,
+      general_lifestyle_note:
+        form.lifestyle_plan.general_lifestyle_note.trim() || undefined,
+    },
+    doctor_note: form.doctor_note.trim() || undefined,
+  });
 
-  const handleSavePrescription = async () => {
+  const handleSave = async () => {
     try {
-      setSavingPrescription(true);
+      setSaving(true);
       setError(null);
-      const payload: PrescriptionPayload = {
-        diagnosis_context: prescriptionForm.diagnosis_context?.trim(),
-        general_note: prescriptionForm.general_note?.trim(),
-        medications: prescriptionForm.medications.map((item) => ({
-          medication_name: item.medication_name.trim(),
-          dosage: item.dosage.trim(),
-          frequency: item.frequency.trim(),
-          route: item.route.trim(),
-          duration: item.duration.trim(),
-          timing_instructions: item.timing_instructions.trim(),
-          special_instructions: item.special_instructions.trim() || undefined,
-        })),
-      };
-
-      if (activePrescription) {
-        await treatmentService.updateDoctorPrescription(activePrescription.id, payload);
+      const payload = buildPayload();
+      if (activePlan) {
+        await treatmentService.updateDoctorTreatmentPlan(activePlan.id, payload);
       } else {
-        await treatmentService.createDoctorPrescription(String(id), payload);
+        await treatmentService.createDoctorTreatmentPlan(String(id), payload);
       }
-
       await loadData();
     } catch (err: any) {
-      setError(err.message || 'Unable to save prescription.');
+      setError(err.message || 'Unable to save the doctor treatment plan.');
     } finally {
-      setSavingPrescription(false);
+      setSaving(false);
     }
   };
 
-  const handleSaveLifestylePlan = async () => {
-    try {
-      setSavingLifestyle(true);
-      setError(null);
-      const payload: LifestylePlanPayload = {
-        diet_plan: lifestyleForm.diet_plan?.trim(),
-        exercise_plan: lifestyleForm.exercise_plan?.trim(),
-        sleep_guidance: lifestyleForm.sleep_guidance?.trim(),
-        stress_guidance: lifestyleForm.stress_guidance?.trim(),
-        monitoring_guidance: lifestyleForm.monitoring_guidance?.trim(),
-        follow_up_note: lifestyleForm.follow_up_note?.trim(),
-        general_note: lifestyleForm.general_note?.trim(),
-      };
-
-      if (activeLifestylePlan) {
-        await treatmentService.updateDoctorLifestylePlan(activeLifestylePlan.id, payload);
-      } else {
-        await treatmentService.createDoctorLifestylePlan(String(id), payload);
-      }
-
-      await loadData();
-    } catch (err: any) {
-      setError(err.message || 'Unable to save lifestyle plan.');
-    } finally {
-      setSavingLifestyle(false);
-    }
-  };
-
-  const confirmDiscontinuePrescription = () => {
-    if (!activePrescription) return;
+  const confirmDiscontinue = () => {
+    if (!activePlan) return;
     setDialog({
       visible: true,
-      title: 'Discontinue Prescription',
+      title: 'Discontinue Plan',
       message:
-        'This will move the current prescription out of the active patient view. The history will remain visible.',
+        'This will remove the current doctor-authored treatment plan from the active patient view while keeping it in history.',
       onConfirm: async () => {
         try {
-          await treatmentService.discontinueDoctorPrescription(activePrescription.id);
+          await treatmentService.discontinueDoctorTreatmentPlan(activePlan.id);
           await loadData();
         } catch (err: any) {
-          setError(err.message || 'Unable to discontinue prescription.');
+          setError(err.message || 'Unable to discontinue the treatment plan.');
         }
       },
     });
   };
 
-  const confirmDiscontinueLifestylePlan = () => {
-    if (!activeLifestylePlan) return;
+  const confirmComplete = () => {
+    if (!activePlan) return;
     setDialog({
       visible: true,
-      title: 'Discontinue Lifestyle Plan',
+      title: 'Complete Plan',
       message:
-        'This will remove the current lifestyle plan from the active patient dashboard while keeping the record in history.',
+        'This marks the active doctor-authored treatment plan as completed and keeps it in the patient history.',
       onConfirm: async () => {
         try {
-          await treatmentService.discontinueDoctorLifestylePlan(activeLifestylePlan.id);
+          await treatmentService.completeDoctorTreatmentPlan(activePlan.id);
           await loadData();
         } catch (err: any) {
-          setError(err.message || 'Unable to discontinue lifestyle plan.');
+          setError(err.message || 'Unable to complete the treatment plan.');
         }
       },
     });
@@ -319,7 +346,7 @@ export default function PatientTreatmentScreen() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <Header title="Treatment Plan" showBack />
+        <Header title="Doctor Treatment Plan" showBack />
         <View className="flex-1 items-center justify-center">
           <Loader />
         </View>
@@ -330,7 +357,7 @@ export default function PatientTreatmentScreen() {
   if (error && !patient) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <Header title="Treatment Plan" showBack />
+        <Header title="Doctor Treatment Plan" showBack />
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-base text-text-secondary text-center">{error}</Text>
           <Button className="mt-4" variant="outline" onPress={() => router.back()}>
@@ -343,11 +370,8 @@ export default function PatientTreatmentScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      <Header title="Treatment Plan" showBack />
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 28 }}
-      >
+      <Header title="Doctor Treatment Plan" showBack />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28 }}>
         <View className="px-6 pt-4">
           <Card className="mb-4 border border-primary/20 bg-primary/5">
             <Text className="text-xs uppercase tracking-[1px] text-text-secondary mb-2">
@@ -357,7 +381,8 @@ export default function PatientTreatmentScreen() {
               {patient?.full_name ?? 'Assigned patient'}
             </Text>
             <Text className="text-sm text-text-secondary">
-              {patient?.patient_id ?? 'Patient'}{patient ? ` • ${patient.demographics.age} years` : ''}
+              {patient?.patient_id ?? 'Patient'}
+              {patient ? ` • ${patient.demographics.age} years` : ''}
             </Text>
           </Card>
 
@@ -368,78 +393,182 @@ export default function PatientTreatmentScreen() {
           ) : null}
 
           <Card className="mb-4 border border-border">
-            <SectionHeader title="Active Prescription" />
-            {activePrescription ? (
+            <SectionHeader title="Current Active Plan" />
+            {activePlan ? (
               <View>
                 <View className="mb-3 flex-row items-center justify-between">
-                  <Badge variant={getStatusVariant(activePrescription.status)} size="sm">
-                    {activePrescription.status}
+                  <Badge variant={getStatusVariant(activePlan.status)} size="sm">
+                    {activePlan.status}
                   </Badge>
                   <Text className="text-xs text-text-secondary">
-                    Updated {formatDateTime(activePrescription.updated_at)}
+                    Updated {formatDateTime(activePlan.updated_at)}
                   </Text>
                 </View>
-                {activePrescription.medications.map((item) => (
-                  <View key={item.id} className="mb-3 rounded-2xl bg-background px-4 py-3">
-                    <Text className="text-base font-semibold text-text">
-                      {item.medication_name}
-                    </Text>
-                    <Text className="mt-1 text-sm text-text-secondary">
-                      {item.dosage} • {item.frequency} • {item.route}
-                    </Text>
-                    <Text className="mt-1 text-sm text-text-secondary">
-                      {item.duration} • {item.timing_instructions}
-                    </Text>
-                    {item.special_instructions ? (
-                      <Text className="mt-1 text-sm text-text-secondary">
-                        Note: {item.special_instructions}
-                      </Text>
-                    ) : null}
+
+                {activePlan.assessment.diagnosis ||
+                activePlan.assessment.clinical_impression ||
+                activePlan.assessment.risk_assessment ||
+                activePlan.assessment.treatment_goal ||
+                activePlan.assessment.follow_up_note ||
+                activePlan.assessment.rationale ? (
+                  <View className="mb-4 rounded-2xl bg-background px-4 py-4">
+                    <Text className="text-base font-semibold text-text mb-3">Assessment</Text>
+                    {[
+                      ['Diagnosis', activePlan.assessment.diagnosis],
+                      ['Clinical impression', activePlan.assessment.clinical_impression],
+                      ['Risk assessment', activePlan.assessment.risk_assessment],
+                      ['Treatment goal', activePlan.assessment.treatment_goal],
+                      ['Follow-up note', activePlan.assessment.follow_up_note],
+                      ['Rationale', activePlan.assessment.rationale],
+                    ].map(([label, value]) =>
+                      value ? (
+                        <View key={label} className="mb-2">
+                          <Text className="text-sm font-semibold text-text">{label}</Text>
+                          <Text className="text-sm text-text-secondary leading-5">
+                            {value}
+                          </Text>
+                        </View>
+                      ) : null,
+                    )}
                   </View>
-                ))}
-                {activePrescription.general_note ? (
-                  <Text className="text-sm leading-6 text-text-secondary">
-                    {activePrescription.general_note}
-                  </Text>
                 ) : null}
-                <Button
-                  variant="outline"
-                  className="mt-4"
-                  onPress={confirmDiscontinuePrescription}
-                >
-                  Discontinue Prescription
+
+                {activePlan.medications.length > 0 ? (
+                  <View className="mb-4 rounded-2xl bg-background px-4 py-4">
+                    <Text className="text-base font-semibold text-text mb-3">Medications</Text>
+                    {activePlan.medications.map((item) => (
+                      <View key={item.id} className="mb-3">
+                        <Text className="text-sm font-semibold text-text">
+                          {item.medication_name}
+                        </Text>
+                        <Text className="text-sm text-text-secondary">
+                          {item.dosage} • {item.frequency} • {item.route}
+                        </Text>
+                        <Text className="text-sm text-text-secondary">
+                          {item.duration} • {item.timing_instructions}
+                        </Text>
+                        {item.special_instructions ? (
+                          <Text className="text-sm text-text-secondary">
+                            Note: {item.special_instructions}
+                          </Text>
+                        ) : null}
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
+                {activePlan.lifestyle_plan.diet_plan ||
+                activePlan.lifestyle_plan.exercise_plan ||
+                activePlan.lifestyle_plan.sleep_guidance ||
+                activePlan.lifestyle_plan.stress_guidance ||
+                activePlan.lifestyle_plan.monitoring_guidance ||
+                activePlan.lifestyle_plan.general_lifestyle_note ? (
+                  <View className="mb-4 rounded-2xl bg-background px-4 py-4">
+                    <Text className="text-base font-semibold text-text mb-3">
+                      Lifestyle guidance
+                    </Text>
+                    {[
+                      ['Diet', activePlan.lifestyle_plan.diet_plan],
+                      ['Exercise', activePlan.lifestyle_plan.exercise_plan],
+                      ['Sleep', activePlan.lifestyle_plan.sleep_guidance],
+                      ['Stress', activePlan.lifestyle_plan.stress_guidance],
+                      ['Monitoring', activePlan.lifestyle_plan.monitoring_guidance],
+                      ['General note', activePlan.lifestyle_plan.general_lifestyle_note],
+                    ].map(([label, value]) =>
+                      value ? (
+                        <View key={label} className="mb-2">
+                          <Text className="text-sm font-semibold text-text">{label}</Text>
+                          <Text className="text-sm text-text-secondary leading-5">
+                            {value}
+                          </Text>
+                        </View>
+                      ) : null,
+                    )}
+                  </View>
+                ) : null}
+
+                {activePlan.doctor_note ? (
+                  <View className="mb-4 rounded-2xl bg-background px-4 py-4">
+                    <Text className="text-base font-semibold text-text mb-2">
+                      Doctor note
+                    </Text>
+                    <Text className="text-sm text-text-secondary leading-5">
+                      {activePlan.doctor_note}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <Button variant="outline" className="mb-3" onPress={confirmComplete}>
+                  Mark Plan Complete
+                </Button>
+                <Button variant="outline" onPress={confirmDiscontinue}>
+                  Discontinue Plan
                 </Button>
               </View>
             ) : (
-              <Text className="text-sm text-text-secondary">
-                No active prescription yet. Save one below and it will appear on the patient dashboard immediately.
+              <Text className="text-sm text-text-secondary leading-5">
+                No active doctor-authored plan yet. Save one below and the patient dashboard plus chatbot will read from the same stored backend record.
               </Text>
             )}
           </Card>
 
           <Card className="mb-4 border border-border">
-            <SectionHeader title={activePrescription ? 'Update Prescription' : 'Create Prescription'} />
+            <SectionHeader title={activePlan ? 'Update Doctor Plan' : 'Create Doctor Plan'} />
+
+            <Text className="text-sm font-semibold text-text mb-3">Assessment</Text>
             <FormInput
-              label="Diagnosis context"
-              value={prescriptionForm.diagnosis_context}
-              onChangeText={(text) =>
-                setPrescriptionForm((current) => ({ ...current, diagnosis_context: text }))
-              }
-              placeholder="Type 2 diabetes follow-up"
+              label="Diagnosis"
+              value={form.assessment.diagnosis}
+              onChangeText={(text) => setAssessmentField('diagnosis', text)}
+              placeholder="Type 2 Diabetes Mellitus"
               className="mb-3"
             />
             <FormInput
-              label="Doctor note"
-              value={prescriptionForm.general_note}
-              onChangeText={(text) =>
-                setPrescriptionForm((current) => ({ ...current, general_note: text }))
-              }
-              placeholder="Overall treatment note"
+              label="Clinical impression"
+              value={form.assessment.clinical_impression}
+              onChangeText={(text) => setAssessmentField('clinical_impression', text)}
+              placeholder="Poor glycemic control with elevated HbA1c"
+              multiline
+              numberOfLines={3}
+              className="mb-3"
+            />
+            <FormInput
+              label="Risk assessment"
+              value={form.assessment.risk_assessment}
+              onChangeText={(text) => setAssessmentField('risk_assessment', text)}
+              placeholder="High risk"
+              className="mb-3"
+            />
+            <FormInput
+              label="Treatment goal"
+              value={form.assessment.treatment_goal}
+              onChangeText={(text) => setAssessmentField('treatment_goal', text)}
+              placeholder="Reduce HbA1c and improve weight control"
+              multiline
+              numberOfLines={2}
+              className="mb-3"
+            />
+            <FormInput
+              label="Follow-up note"
+              value={form.assessment.follow_up_note}
+              onChangeText={(text) => setAssessmentField('follow_up_note', text)}
+              placeholder="Review after 2 weeks"
+              multiline
+              numberOfLines={2}
+              className="mb-3"
+            />
+            <FormInput
+              label="Rationale"
+              value={form.assessment.rationale}
+              onChangeText={(text) => setAssessmentField('rationale', text)}
+              placeholder="Patient has persistently elevated glucose and BMI."
               multiline
               numberOfLines={3}
               className="mb-4"
             />
-            {prescriptionForm.medications.map((item, index) => (
+
+            <Text className="text-sm font-semibold text-text mb-3">Medications</Text>
+            {form.medications.map((item, index) => (
               <View key={`medication-${index}`} className="mb-4 rounded-2xl bg-background p-4">
                 <View className="mb-3 flex-row items-center justify-between">
                   <Text className="text-base font-semibold text-text">
@@ -501,204 +630,121 @@ export default function PatientTreatmentScreen() {
                   }
                   placeholder="Monitor GI symptoms"
                   multiline
-                  numberOfLines={3}
+                  numberOfLines={2}
                 />
               </View>
             ))}
-            <Button variant="outline" onPress={addMedication}>
-              Add medication
-            </Button>
-            <Button
-              className="mt-3"
-              onPress={handleSavePrescription}
-              loading={savingPrescription}
-            >
-              {activePrescription ? 'Update prescription' : 'Save prescription'}
-            </Button>
-          </Card>
 
-          <Card className="mb-4 border border-border">
-            <SectionHeader title="Active Lifestyle Plan" />
-            {activeLifestylePlan ? (
-              <View>
-                <View className="mb-3 flex-row items-center justify-between">
-                  <Badge variant={getStatusVariant(activeLifestylePlan.status)} size="sm">
-                    {activeLifestylePlan.status}
-                  </Badge>
-                  <Text className="text-xs text-text-secondary">
-                    Updated {formatDateTime(activeLifestylePlan.updated_at)}
-                  </Text>
-                </View>
-                {[
-                  ['Diet guidance', activeLifestylePlan.diet_plan],
-                  ['Exercise guidance', activeLifestylePlan.exercise_plan],
-                  ['Sleep guidance', activeLifestylePlan.sleep_guidance],
-                  ['Stress guidance', activeLifestylePlan.stress_guidance],
-                  ['Monitoring guidance', activeLifestylePlan.monitoring_guidance],
-                  ['Follow-up note', activeLifestylePlan.follow_up_note],
-                  ['General note', activeLifestylePlan.general_note],
-                ].map(([label, value]) =>
-                  value ? (
-                    <View key={label} className="mb-3 rounded-2xl bg-background px-4 py-3">
-                      <Text className="text-sm font-semibold text-text">{label}</Text>
-                      <Text className="mt-1 text-sm leading-6 text-text-secondary">
-                        {value}
-                      </Text>
-                    </View>
-                  ) : null,
-                )}
-                <Button
-                  variant="outline"
-                  className="mt-2"
-                  onPress={confirmDiscontinueLifestylePlan}
-                >
-                  Discontinue Lifestyle Plan
-                </Button>
-              </View>
-            ) : (
-              <Text className="text-sm text-text-secondary">
-                No active lifestyle guidance yet. Save one below and the patient will see it right away.
-              </Text>
-            )}
-          </Card>
+            <Button variant="outline" className="mb-4" onPress={addMedication}>
+              Add Medication
+            </Button>
 
-          <Card className="mb-4 border border-border">
-            <SectionHeader
-              title={activeLifestylePlan ? 'Update Lifestyle Plan' : 'Create Lifestyle Plan'}
-            />
+            <Text className="text-sm font-semibold text-text mb-3">Lifestyle guidance</Text>
             <FormInput
               label="Diet guidance"
-              value={lifestyleForm.diet_plan ?? ''}
-              onChangeText={(text) => setLifestyleForm((current) => ({ ...current, diet_plan: text }))}
-              placeholder="Low sugar, high fiber meal guidance"
+              value={form.lifestyle_plan.diet_plan}
+              onChangeText={(text) => setLifestyleField('diet_plan', text)}
+              placeholder="Reduce refined sugar and portion size"
               multiline
               numberOfLines={3}
               className="mb-3"
             />
             <FormInput
               label="Exercise guidance"
-              value={lifestyleForm.exercise_plan ?? ''}
-              onChangeText={(text) =>
-                setLifestyleForm((current) => ({ ...current, exercise_plan: text }))
-              }
-              placeholder="30 minutes brisk walk five times weekly"
+              value={form.lifestyle_plan.exercise_plan}
+              onChangeText={(text) => setLifestyleField('exercise_plan', text)}
+              placeholder="30 minutes brisk walk daily"
               multiline
               numberOfLines={3}
               className="mb-3"
             />
             <FormInput
               label="Sleep guidance"
-              value={lifestyleForm.sleep_guidance ?? ''}
-              onChangeText={(text) =>
-                setLifestyleForm((current) => ({ ...current, sleep_guidance: text }))
-              }
-              placeholder="Aim for a stable 7 to 8 hour sleep routine"
+              value={form.lifestyle_plan.sleep_guidance}
+              onChangeText={(text) => setLifestyleField('sleep_guidance', text)}
+              placeholder="Maintain 7 to 8 hours of sleep"
               multiline
               numberOfLines={3}
               className="mb-3"
             />
             <FormInput
-              label="Stress / routine guidance"
-              value={lifestyleForm.stress_guidance ?? ''}
-              onChangeText={(text) =>
-                setLifestyleForm((current) => ({ ...current, stress_guidance: text }))
-              }
-              placeholder="Keep meal timing consistent and reduce late-night stressors"
+              label="Stress guidance"
+              value={form.lifestyle_plan.stress_guidance}
+              onChangeText={(text) => setLifestyleField('stress_guidance', text)}
+              placeholder="Reduce stress triggers and sedentary routine"
               multiline
               numberOfLines={3}
               className="mb-3"
             />
             <FormInput
               label="Monitoring guidance"
-              value={lifestyleForm.monitoring_guidance ?? ''}
-              onChangeText={(text) =>
-                setLifestyleForm((current) => ({
-                  ...current,
-                  monitoring_guidance: text,
-                }))
-              }
-              placeholder="Check fasting glucose three mornings per week"
+              value={form.lifestyle_plan.monitoring_guidance}
+              onChangeText={(text) => setLifestyleField('monitoring_guidance', text)}
+              placeholder="Check fasting glucose twice weekly"
               multiline
               numberOfLines={3}
               className="mb-3"
             />
             <FormInput
-              label="Follow-up note"
-              value={lifestyleForm.follow_up_note ?? ''}
-              onChangeText={(text) =>
-                setLifestyleForm((current) => ({ ...current, follow_up_note: text }))
-              }
-              placeholder="Review readings in two weeks"
+              label="General lifestyle note"
+              value={form.lifestyle_plan.general_lifestyle_note}
+              onChangeText={(text) => setLifestyleField('general_lifestyle_note', text)}
+              placeholder="Focus on consistency over intensity"
               multiline
               numberOfLines={3}
-              className="mb-3"
+              className="mb-4"
             />
+
             <FormInput
-              label="General note"
-              value={lifestyleForm.general_note ?? ''}
+              label="Doctor note"
+              value={form.doctor_note}
               onChangeText={(text) =>
-                setLifestyleForm((current) => ({ ...current, general_note: text }))
+                setForm((current) => ({ ...current, doctor_note: text }))
               }
-              placeholder="Additional care guidance"
+              placeholder="Escalate therapy if HbA1c remains high"
               multiline
               numberOfLines={3}
+              className="mb-4"
             />
+
             <Button
-              className="mt-4"
-              onPress={handleSaveLifestylePlan}
-              loading={savingLifestyle}
+              variant="outline"
+              className="mb-3"
+              onPress={() => router.push(`/patients/${String(id)}/compare-plan` as any)}
+              disabled={!activePlan}
             >
-              {activeLifestylePlan ? 'Update lifestyle plan' : 'Save lifestyle plan'}
+              Compare With Model
+            </Button>
+            <Button onPress={handleSave} loading={saving}>
+              {activePlan ? 'Update Doctor Treatment Plan' : 'Save Doctor Treatment Plan'}
             </Button>
           </Card>
 
-          <Card className="mb-4 border border-border">
-            <SectionHeader title="Treatment History" />
-            {[...prescriptions.filter((item) => item.status !== 'active'), ...plans.filter((item) => item.status !== 'active')].length === 0 ? (
-              <Text className="text-sm text-text-secondary">
-                Older discontinued or completed treatment records will appear here.
-              </Text>
-            ) : (
-              <View>
-                {prescriptions
-                  .filter((item) => item.status !== 'active')
-                  .map((item) => (
-                    <View key={item.id} className="mb-3 rounded-2xl bg-background px-4 py-3">
-                      <View className="mb-2 flex-row items-center justify-between">
-                        <Text className="text-sm font-semibold text-text">Prescription</Text>
-                        <Badge variant={getStatusVariant(item.status)} size="sm">
-                          {item.status}
-                        </Badge>
-                      </View>
-                      <Text className="text-sm text-text-secondary">
-                        {item.medications.map((medication) => medication.medication_name).join(', ')}
-                      </Text>
-                      <Text className="mt-1 text-xs text-text-secondary">
-                        Updated {formatDateTime(item.updated_at)}
-                      </Text>
-                    </View>
-                  ))}
-                {plans
-                  .filter((item) => item.status !== 'active')
-                  .map((item) => (
-                    <View key={item.id} className="mb-3 rounded-2xl bg-background px-4 py-3">
-                      <View className="mb-2 flex-row items-center justify-between">
-                        <Text className="text-sm font-semibold text-text">Lifestyle plan</Text>
-                        <Badge variant={getStatusVariant(item.status)} size="sm">
-                          {item.status}
-                        </Badge>
-                      </View>
-                      <Text className="text-sm text-text-secondary">
-                        {item.follow_up_note || item.general_note || 'Lifestyle guidance record'}
-                      </Text>
-                      <Text className="mt-1 text-xs text-text-secondary">
-                        Updated {formatDateTime(item.updated_at)}
-                      </Text>
-                    </View>
-                  ))}
-              </View>
-            )}
-          </Card>
+          {history.length > 0 ? (
+            <View className="mb-4">
+              <SectionHeader title="Plan History" />
+              {history.map((plan) => (
+                <Card key={plan.id} className="mb-3 border border-border">
+                  <View className="mb-2 flex-row items-center justify-between">
+                    <Text className="text-base font-semibold text-text">
+                      {plan.assessment.diagnosis || 'Doctor treatment plan'}
+                    </Text>
+                    <Badge variant={getStatusVariant(plan.status)} size="sm">
+                      {plan.status}
+                    </Badge>
+                  </View>
+                  <Text className="text-sm text-text-secondary leading-5">
+                    {plan.assessment.treatment_goal ||
+                      plan.doctor_note ||
+                      'Structured doctor-authored treatment record'}
+                  </Text>
+                  <Text className="mt-3 text-xs text-text-secondary">
+                    Updated {formatDateTime(plan.updated_at)}
+                  </Text>
+                </Card>
+              ))}
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -709,14 +755,19 @@ export default function PatientTreatmentScreen() {
         onClose={closeDialog}
         actions={[
           {
-            label: 'Keep active',
+            label: 'Cancel',
             variant: 'secondary',
-            onPress: () => undefined,
+            onPress: () => {},
           },
           {
             label: 'Confirm',
             variant: 'primary',
-            onPress: () => dialog.onConfirm?.(),
+            onPress: () => {
+              const action = dialog.onConfirm;
+              if (action) {
+                void action();
+              }
+            },
           },
         ]}
       />

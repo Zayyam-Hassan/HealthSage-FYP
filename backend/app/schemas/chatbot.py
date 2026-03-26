@@ -29,7 +29,7 @@ class ChatbotRequest(BaseModel):
     doctor_query: str = Field(default="", description="Free-text query from clinician (current message)")
     mode: str = Field(
         default="recommend",
-        description="recommend | explain | what_if | compare | auto | master (master infers and calls agents/graph explainer as tools)"
+        description="recommend | explain | what_if | compare | doctor_plan | auto | master (master infers and calls agents/graph explainer as tools)"
     )
     message_history: Optional[List[ChatMessage]] = Field(
         default=None,
@@ -63,7 +63,7 @@ class ChatWithHistoryRequest(BaseModel):
     """Request for chat endpoint that persists conversation and messages (ChatGPT-style)."""
     patient_id: str
     doctor_query: str = Field(..., description="Current user message")
-    mode: str = Field(default="recommend", description="recommend | explain | what_if | compare | auto | master")
+    mode: str = Field(default="recommend", description="recommend | explain | what_if | compare | doctor_plan | auto | master")
     conversation_id: Optional[str] = Field(None, description="Existing conversation; if omitted, a new one is created")
     subject: Optional[str] = Field(None, description="Subject for new conversation (default: Clinical chat)")
     doctor_assessment: Optional[DoctorAssessment] = None

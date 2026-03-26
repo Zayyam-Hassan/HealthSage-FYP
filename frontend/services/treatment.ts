@@ -2,6 +2,7 @@ import { apiClient } from './api';
 
 export type TreatmentStatus = 'active' | 'discontinued' | 'completed';
 export type MedicationItemStatus = 'active' | 'discontinued';
+export type DoctorTreatmentStatus = 'active' | 'discontinued' | 'completed';
 
 export interface PrescriptionMedicationItem {
   id: string;
@@ -85,6 +86,90 @@ export interface PatientTreatmentOverview {
 }
 
 const BASE = '/treatment';
+const DOCTOR_TREATMENT_BASE = '/doctor-treatment';
+
+export interface DoctorTreatmentAssessment {
+  diagnosis: string | null;
+  clinical_impression: string | null;
+  risk_assessment: string | null;
+  treatment_goal: string | null;
+  follow_up_note: string | null;
+  rationale: string | null;
+}
+
+export interface DoctorTreatmentLifestylePlan {
+  diet_plan: string | null;
+  exercise_plan: string | null;
+  sleep_guidance: string | null;
+  stress_guidance: string | null;
+  monitoring_guidance: string | null;
+  general_lifestyle_note: string | null;
+}
+
+export interface DoctorTreatmentMedicationItem {
+  id: string;
+  medication_name: string;
+  dosage: string;
+  frequency: string;
+  route: string;
+  duration: string;
+  timing_instructions: string;
+  special_instructions: string | null;
+  status: MedicationItemStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DoctorTreatmentPlan {
+  id: string;
+  patient_id: string;
+  doctor_id: string;
+  patient_name: string | null;
+  doctor_name: string | null;
+  status: DoctorTreatmentStatus;
+  assessment: DoctorTreatmentAssessment;
+  medications: DoctorTreatmentMedicationItem[];
+  lifestyle_plan: DoctorTreatmentLifestylePlan;
+  doctor_note: string | null;
+  discontinued_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DoctorTreatmentMedicationPayload {
+  medication_name: string;
+  dosage: string;
+  frequency: string;
+  route: string;
+  duration: string;
+  timing_instructions: string;
+  special_instructions?: string;
+}
+
+export interface DoctorTreatmentAssessmentPayload {
+  diagnosis?: string;
+  clinical_impression?: string;
+  risk_assessment?: string;
+  treatment_goal?: string;
+  follow_up_note?: string;
+  rationale?: string;
+}
+
+export interface DoctorTreatmentLifestylePayload {
+  diet_plan?: string;
+  exercise_plan?: string;
+  sleep_guidance?: string;
+  stress_guidance?: string;
+  monitoring_guidance?: string;
+  general_lifestyle_note?: string;
+}
+
+export interface DoctorTreatmentPlanPayload {
+  assessment?: DoctorTreatmentAssessmentPayload;
+  medications?: DoctorTreatmentMedicationPayload[];
+  lifestyle_plan?: DoctorTreatmentLifestylePayload;
+  doctor_note?: string;
+}
 
 class TreatmentService {
   async getDoctorPatientPrescriptions(patientId: string): Promise<{ items: Prescription[] }> {
@@ -175,6 +260,76 @@ class TreatmentService {
 
   async getPatientTreatmentOverview(): Promise<PatientTreatmentOverview> {
     return apiClient.get<PatientTreatmentOverview>(`${BASE}/patient/overview`);
+  }
+
+  async getDoctorTreatmentPlans(patientId: string): Promise<{ items: DoctorTreatmentPlan[] }> {
+    return apiClient.get<{ items: DoctorTreatmentPlan[] }>(
+      `${DOCTOR_TREATMENT_BASE}/patients/${patientId}`,
+    );
+  }
+
+  async getDoctorActiveTreatmentSummary(
+    patientId: string,
+  ): Promise<{ item: DoctorTreatmentPlan | null }> {
+    return apiClient.get<{ item: DoctorTreatmentPlan | null }>(
+      `${DOCTOR_TREATMENT_BASE}/patients/${patientId}/active/summary`,
+    );
+  }
+
+  async createDoctorTreatmentPlan(
+    patientId: string,
+    payload: DoctorTreatmentPlanPayload,
+  ): Promise<DoctorTreatmentPlan> {
+    return apiClient.post<DoctorTreatmentPlan>(
+      `${DOCTOR_TREATMENT_BASE}/patients/${patientId}`,
+      payload,
+    );
+  }
+
+  async getDoctorTreatmentPlan(planId: string): Promise<DoctorTreatmentPlan> {
+    return apiClient.get<DoctorTreatmentPlan>(`${DOCTOR_TREATMENT_BASE}/${planId}`);
+  }
+
+  async updateDoctorTreatmentPlan(
+    planId: string,
+    payload: DoctorTreatmentPlanPayload,
+  ): Promise<DoctorTreatmentPlan> {
+    return apiClient.put<DoctorTreatmentPlan>(
+      `${DOCTOR_TREATMENT_BASE}/${planId}`,
+      payload,
+    );
+  }
+
+  async discontinueDoctorTreatmentPlan(planId: string): Promise<DoctorTreatmentPlan> {
+    return apiClient.patch<DoctorTreatmentPlan>(
+      `${DOCTOR_TREATMENT_BASE}/${planId}/discontinue`,
+      {},
+    );
+  }
+
+  async completeDoctorTreatmentPlan(planId: string): Promise<DoctorTreatmentPlan> {
+    return apiClient.patch<DoctorTreatmentPlan>(
+      `${DOCTOR_TREATMENT_BASE}/${planId}/complete`,
+      {},
+    );
+  }
+
+  async getPatientActiveDoctorTreatmentPlan(): Promise<{ item: DoctorTreatmentPlan | null }> {
+    return apiClient.get<{ item: DoctorTreatmentPlan | null }>(
+      `${DOCTOR_TREATMENT_BASE}/patient/active`,
+    );
+  }
+
+  async getPatientDoctorTreatmentHistory(): Promise<{ items: DoctorTreatmentPlan[] }> {
+    return apiClient.get<{ items: DoctorTreatmentPlan[] }>(
+      `${DOCTOR_TREATMENT_BASE}/patient/history`,
+    );
+  }
+
+  async getPatientDoctorTreatmentPlan(planId: string): Promise<DoctorTreatmentPlan> {
+    return apiClient.get<DoctorTreatmentPlan>(
+      `${DOCTOR_TREATMENT_BASE}/patient/${planId}`,
+    );
   }
 }
 

@@ -11,6 +11,7 @@ from app.schemas.chatbot import ChatbotRequest, ChatbotResponse
 from app.schemas.explainability import ExplainabilityPayload
 
 from .doctor_comparison import compute_doctor_vs_model_diff
+from .doctor_treatment_agent import DoctorTreatmentAgent
 from .explainability_agent import ExplainabilityAgent
 from .lifestyle_agent import LifestyleAgent
 from .medication_agent import MedicationAgent
@@ -36,6 +37,21 @@ def _infer_mode_from_query(doctor_query: str) -> str:
         or (" if " in f" {q} " and bool(extract_what_if_changes(q)))
     ):
         return "what_if"
+    if (
+        "doctor treatment" in q
+        or "treatment plan" in q
+        or "doctor plan" in q
+        or "doctor note" in q
+        or "follow-up note" in q
+        or "follow up note" in q
+        or "what has the doctor prescribed" in q
+        or "what did the doctor prescribe" in q
+        or "lifestyle advice did the doctor" in q
+        or "doctor's lifestyle" in q
+        or "doctor prescribed" in q
+        or "prescribed for this patient" in q
+    ):
+        return "doctor_plan"
     if "explain" in q or "why " in q or "reason" in q or "factor" in q:
         return "explain"
     if "compare" in q or "my plan" in q or "vs " in q or "versus" in q or "against" in q:
@@ -51,6 +67,7 @@ class CoordinatorAgent:
         self._medication = MedicationAgent()
         self._explainability = ExplainabilityAgent()
         self._whatif = WhatIfAgent()
+        self._doctor_treatment = DoctorTreatmentAgent()
 
     def handle_request(self, payload: ChatbotRequest) -> ChatbotResponse:
         """
@@ -67,6 +84,7 @@ class CoordinatorAgent:
         explainability_output: Dict[str, Any] = {}
         comparison_output: Dict[str, Any] = {}
         whatif_output: Dict[str, Any] = {}
+        doctor_treatment_output: Dict[str, Any] = {}
 
         if mode == "what_if":
             what_if_changes = payload.what_if_changes or {}
@@ -101,6 +119,21 @@ class CoordinatorAgent:
                 final_message=message_bundle["final_message"] or "",
                 detailed_message=message_bundle.get("detailed_message"),
                 summary_message=message_bundle.get("summary_message"),
+                doctor_note="The doctor remains the final decision-maker.",
+            )
+
+        if mode == "doctor_plan":
+            doctor_treatment_output = self._doctor_treatment.run(patient_id)
+            formatted = doctor_treatment_output.get("formatted") or {}
+            return ChatbotResponse(
+                mode=mode,
+                patient_id=patient_id,
+                agent_outputs={
+                    "doctor_treatment": doctor_treatment_output,
+                },
+                final_message=formatted.get("message") or formatted.get("summary") or "",
+                detailed_message=formatted.get("message"),
+                summary_message=formatted.get("summary"),
                 doctor_note="The doctor remains the final decision-maker.",
             )
 

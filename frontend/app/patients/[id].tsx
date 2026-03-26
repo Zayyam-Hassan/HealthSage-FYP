@@ -319,6 +319,13 @@ export default function PatientDetailsScreen() {
                 </Button>
                 <Button
                   variant="outline"
+                  onPress={() => router.push(`/patients/${patient.id}/compare-plan` as any)}
+                  className="mb-3"
+                >
+                  Compare Doctor Plan
+                </Button>
+                <Button
+                  variant="outline"
                   onPress={() =>
                     router.push({
                       pathname: '/reports',

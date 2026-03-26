@@ -28,6 +28,7 @@ import {
 import {
   treatmentService,
   type PatientTreatmentOverview,
+  type DoctorTreatmentPlan,
 } from '@/services/treatment';
 
 type QuickAction = {
@@ -136,6 +137,9 @@ export default function HomeScreen() {
   const [reportOverview, setReportOverview] = useState<ReportOverviewResponse | null>(null);
   const [treatmentOverview, setTreatmentOverview] =
     useState<PatientTreatmentOverview | null>(null);
+  const [activeDoctorTreatmentPlan, setActiveDoctorTreatmentPlan] =
+    useState<DoctorTreatmentPlan | null>(null);
+  const [doctorTreatmentHistory, setDoctorTreatmentHistory] = useState<DoctorTreatmentPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -160,19 +164,33 @@ export default function HomeScreen() {
         setMyProfile(null);
         setReportOverview(null);
         setTreatmentOverview(null);
+        setActiveDoctorTreatmentPlan(null);
+        setDoctorTreatmentHistory([]);
       } else {
-        const [appointmentRes, doctorsRes, profile, reportsRes, treatmentRes] = await Promise.all([
+        const [
+          appointmentRes,
+          doctorsRes,
+          profile,
+          reportsRes,
+          treatmentOverviewRes,
+          activeTreatmentRes,
+          treatmentHistoryRes,
+        ] = await Promise.all([
           appointmentsService.getPatientAppointments({ limit: 5 }),
           doctorsService.getDoctors({ page: 1, limit: 6 }),
           patientsService.getMyPatientProfile().catch(() => null),
           reportsService.getPatientReportsOverview().catch(() => null),
           treatmentService.getPatientTreatmentOverview().catch(() => null),
+          treatmentService.getPatientActiveDoctorTreatmentPlan().catch(() => ({ item: null })),
+          treatmentService.getPatientDoctorTreatmentHistory().catch(() => ({ items: [] })),
         ]);
         setAppointments(appointmentRes.items);
         setPopularDoctors(doctorsRes.items);
         setMyProfile(profile);
         setReportOverview(reportsRes);
-        setTreatmentOverview(treatmentRes);
+        setTreatmentOverview(treatmentOverviewRes);
+        setActiveDoctorTreatmentPlan(activeTreatmentRes.item);
+        setDoctorTreatmentHistory(treatmentHistoryRes.items);
         setMyPatients([]);
         setRequests([]);
       }
@@ -351,10 +369,10 @@ export default function HomeScreen() {
               </View>
               <Card className="border border-border">
                 <Text className="text-base font-semibold text-text mb-1">
-                  Prescriptions and lifestyle guidance
+                  Doctor-authored treatment plans
                 </Text>
                 <Text className="text-sm text-text-secondary leading-5">
-                  Open any assigned patient to add medications, update care instructions, or discontinue an active plan. Patient dashboards refresh from the saved backend record.
+                  Open any assigned patient to save diagnosis context, medications, lifestyle guidance, and follow-up notes into one structured backend plan the patient and chatbot can both read.
                 </Text>
               </Card>
             </View>
@@ -417,6 +435,97 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 )}
               />
+            </View>
+          )}
+
+          {userRole === 'patient' && (
+            <View className="mb-5">
+              <View className="flex-row items-center justify-between mb-3">
+                <Text className="text-xl font-bold text-text">Doctor treatment plan</Text>
+                <TouchableOpacity onPress={() => router.push('/patients' as any)}>
+                  <Text className="text-sm font-semibold text-primary">My profile</Text>
+                </TouchableOpacity>
+              </View>
+              {!activeDoctorTreatmentPlan ? (
+                <Card className="border border-border">
+                  <Text className="text-sm text-text-secondary leading-5">
+                    Your doctor has not saved a structured treatment plan yet.
+                  </Text>
+                </Card>
+              ) : (
+                <Card className="border border-border">
+                  <Text className="text-base font-semibold text-text mb-2">
+                    {activeDoctorTreatmentPlan.assessment.diagnosis || 'Doctor treatment plan'}
+                  </Text>
+                  <Text className="text-xs uppercase tracking-[1px] text-success mb-3">
+                    {activeDoctorTreatmentPlan.status}
+                  </Text>
+                  {activeDoctorTreatmentPlan.assessment.clinical_impression ? (
+                    <View className="mb-3">
+                      <Text className="text-sm font-semibold text-text">Clinical impression</Text>
+                      <Text className="text-sm text-text-secondary leading-5">
+                        {activeDoctorTreatmentPlan.assessment.clinical_impression}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {activeDoctorTreatmentPlan.assessment.treatment_goal ? (
+                    <View className="mb-3">
+                      <Text className="text-sm font-semibold text-text">Treatment goal</Text>
+                      <Text className="text-sm text-text-secondary leading-5">
+                        {activeDoctorTreatmentPlan.assessment.treatment_goal}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {activeDoctorTreatmentPlan.medications.length > 0 ? (
+                    <View className="mb-3">
+                      <Text className="text-sm font-semibold text-text mb-2">Medications</Text>
+                      {activeDoctorTreatmentPlan.medications.map((medication) => (
+                        <View key={medication.id} className="mb-3">
+                          <Text className="text-sm font-semibold text-text">
+                            {medication.medication_name}
+                          </Text>
+                          <Text className="text-sm text-text-secondary">
+                            {medication.dosage} • {medication.frequency} • {medication.route}
+                          </Text>
+                          <Text className="text-sm text-text-secondary">
+                            {medication.duration} • {medication.timing_instructions}
+                          </Text>
+                          {medication.special_instructions ? (
+                            <Text className="text-sm text-text-secondary">
+                              Note: {medication.special_instructions}
+                            </Text>
+                          ) : null}
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  {[
+                    ['Diet', activeDoctorTreatmentPlan.lifestyle_plan.diet_plan],
+                    ['Exercise', activeDoctorTreatmentPlan.lifestyle_plan.exercise_plan],
+                    ['Sleep', activeDoctorTreatmentPlan.lifestyle_plan.sleep_guidance],
+                    ['Stress', activeDoctorTreatmentPlan.lifestyle_plan.stress_guidance],
+                    ['Monitoring', activeDoctorTreatmentPlan.lifestyle_plan.monitoring_guidance],
+                    ['Lifestyle note', activeDoctorTreatmentPlan.lifestyle_plan.general_lifestyle_note],
+                    ['Follow-up', activeDoctorTreatmentPlan.assessment.follow_up_note],
+                    ['Doctor note', activeDoctorTreatmentPlan.doctor_note],
+                  ].map(([label, value]) =>
+                    value ? (
+                      <View key={label} className="mb-2">
+                        <Text className="text-sm font-semibold text-text">{label}</Text>
+                        <Text className="text-sm text-text-secondary leading-5">
+                          {value}
+                        </Text>
+                      </View>
+                    ) : null,
+                  )}
+                  <Text className="text-xs text-text-secondary mt-2">
+                    Updated {formatDate(activeDoctorTreatmentPlan.updated_at)}
+                    {activeDoctorTreatmentPlan.doctor_name
+                      ? ` • ${activeDoctorTreatmentPlan.doctor_name}`
+                      : ''}
+                  </Text>
+                </Card>
+              )}
             </View>
           )}
 
@@ -573,6 +682,33 @@ export default function HomeScreen() {
               )}
             </View>
           )}
+
+          {userRole === 'patient' &&
+          doctorTreatmentHistory.filter((item) => item.status !== 'active').length > 0 ? (
+            <View className="mb-5">
+              <Text className="text-xl font-bold text-text mb-3">
+                Doctor treatment history
+              </Text>
+              {doctorTreatmentHistory
+                .filter((item) => item.status !== 'active')
+                .slice(0, 3)
+                .map((plan) => (
+                  <Card key={plan.id} className="mb-3 border border-border">
+                    <Text className="text-base font-semibold text-text">
+                      {plan.assessment.diagnosis || 'Doctor treatment plan'}
+                    </Text>
+                    <Text className="text-sm text-text-secondary mt-1">
+                      {plan.assessment.treatment_goal ||
+                        plan.doctor_note ||
+                        'Structured doctor-authored treatment record'}
+                    </Text>
+                    <Text className="text-xs uppercase tracking-[1px] text-warning mt-2">
+                      {plan.status}
+                    </Text>
+                  </Card>
+                ))}
+            </View>
+          ) : null}
 
           {userRole === 'patient' &&
           ((treatmentOverview?.prescription_history?.length ?? 0) > 1 ||

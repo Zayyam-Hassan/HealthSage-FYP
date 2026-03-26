@@ -10,6 +10,12 @@ export interface ChatWithHistoryRequest {
   conversation_id?: string | null;
   subject?: string;
   start_new?: boolean;
+  doctor_assessment?: {
+    diagnosis?: string;
+    planned_medications?: string[];
+    planned_lifestyle?: string[];
+  };
+  what_if_changes?: Record<string, unknown>;
 }
 
 export interface ChatWithHistoryResponse {
@@ -66,6 +72,12 @@ class ChatbotService {
     }
     if (payload.start_new) {
       body.start_new = true;
+    }
+    if (payload.doctor_assessment) {
+      body.doctor_assessment = payload.doctor_assessment;
+    }
+    if (payload.what_if_changes) {
+      body.what_if_changes = payload.what_if_changes;
     }
     return await apiClient.post<ChatWithHistoryResponse>('/chatbot/chat', body);
   }

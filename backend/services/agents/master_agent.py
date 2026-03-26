@@ -17,6 +17,7 @@ from app.schemas.chatbot import ChatbotRequest, ChatbotResponse
 from app.schemas.explainability import ExplainabilityPayload
 
 from .doctor_comparison import compute_doctor_vs_model_diff
+from .doctor_treatment_agent import DoctorTreatmentAgent
 from .explainability_agent import ExplainabilityAgent
 from .lifestyle_agent import LifestyleAgent
 from .medication_agent import MedicationAgent
@@ -45,10 +46,11 @@ TOOL_NAMES = [
     "get_explainability", # Explain risk + recommendations (why this patient)
     "what_if",            # What-if scenario (needs what_if_changes in payload)
     "compare",            # Compare doctor plan vs model (needs doctor_assessment in payload)
+    "get_doctor_treatment_plan",  # Fetch stored doctor-authored treatment plan
 ]
 
 # Tools that can run in parallel (no dependency on other tools)
-INDEPENDENT_TOOLS = {"get_risk", "get_risk_explain", "get_lifestyle", "get_medication", "what_if"}
+INDEPENDENT_TOOLS = {"get_risk", "get_risk_explain", "get_lifestyle", "get_medication", "what_if", "get_doctor_treatment_plan"}
 # Tools that reuse risk/lifestyle/medication when already computed
 DEPENDENT_TOOLS = {"get_explainability", "compare"}
 
@@ -66,6 +68,7 @@ Available tools:
 - get_explainability: Get explanation of why we recommend what we recommend for this patient. Use when the user asks "why these recommendations", "explain the suggestions", "rationale".
 - what_if: Run a what-if scenario (e.g. "what if BMI were 30?"). Use when the user asks "what if", "suppose", "hypothetical", "if we change". Requires hypothetical values to be provided in the request.
 - compare: Compare the clinician's own plan (medications/lifestyle) with the model's suggestions. Use when the user says "compare", "my plan", "vs my plan", "against my assessment". Requires the clinician's plan in the request.
+- get_doctor_treatment_plan: Fetch the current stored doctor-authored treatment plan (diagnosis, medications, lifestyle guidance, follow-up, doctor note). Use when the user asks what the doctor prescribed, what the current treatment goal is, what lifestyle advice the doctor gave, or what follow-up note is on file.
 
 Output ONLY valid JSON, no markdown or extra text:
 {
@@ -156,6 +159,27 @@ def _parse_tool_decision(llm_output: str) -> Dict[str, Any]:
     return out
 
 
+def _looks_like_doctor_treatment_query(query: str) -> bool:
+    q = (query or "").strip().lower()
+    return any(
+        token in q
+        for token in [
+            "doctor treatment",
+            "treatment plan",
+            "doctor plan",
+            "doctor note",
+            "follow-up note",
+            "follow up note",
+            "what has the doctor prescribed",
+            "what did the doctor prescribe",
+            "doctor prescribed",
+            "lifestyle advice did the doctor",
+            "current treatment goal",
+            "current doctor plan",
+        ]
+    )
+
+
 class MasterAgent:
     """Chatbot that infers which tools (agents / graph explainer) to call and synthesizes a reply."""
 
@@ -164,6 +188,7 @@ class MasterAgent:
         self._medication = MedicationAgent()
         self._explainability = ExplainabilityAgent()
         self._whatif = WhatIfAgent()
+        self._doctor_treatment = DoctorTreatmentAgent()
 
     def _run_tool(
         self,
@@ -230,6 +255,9 @@ class MasterAgent:
                     {"risk": risk_output, "lifestyle": lifestyle_output, "medication": medication_output},
                 )
                 return comparison
+
+            if tool_name == "get_doctor_treatment_plan":
+                return self._doctor_treatment.run(patient_id)
         except Exception as e:
             logger.exception("Master agent: tool %s failed: %s", tool_name, e)
             return {"error": str(e), "tool": tool_name}
@@ -279,10 +307,12 @@ class MasterAgent:
                 for token in ("what if", "what-if", "simulate", "scenario", "suppose", " if ", "goes", "becomes")
             ):
                 decision["tools"] = ["what_if"]
+        if not decision["tools"] and _looks_like_doctor_treatment_query(doctor_query):
+            decision["tools"] = ["get_doctor_treatment_plan"]
 
         # No tools: use reply_without_tools
         if not decision["tools"]:
-            reply = decision.get("reply_without_tools") or "I'm here to help with risk assessment, lifestyle and medication suggestions, explanations, what-if scenarios, and comparison with your plan. What would you like to know for this patient?"
+            reply = decision.get("reply_without_tools") or "I'm here to help with risk assessment, stored doctor treatment plans, lifestyle and medication suggestions, explanations, what-if scenarios, and comparison with your plan. What would you like to know for this patient?"
             if isinstance(reply, str):
                 pass
             else:

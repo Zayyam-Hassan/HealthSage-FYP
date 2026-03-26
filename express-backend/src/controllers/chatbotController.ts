@@ -7,6 +7,7 @@ import { Message } from '../models/Message';
 import { Patient } from '../models/Patient';
 import { Report } from '../models/Report';
 import { RiskPrediction } from '../models/RiskPrediction';
+import { getLatestActiveDoctorTreatmentPlanByPatientId } from '../services/doctorTreatmentService';
 import {
   callChatbot,
   callRecommendLifestyle,
@@ -336,13 +337,14 @@ async function buildExpressPatientContext(patientId: string) {
   }
 
   const patientObjectId = new mongoose.Types.ObjectId(patientId);
-  const [patient, latestRisk, latestReport, recommendationArtifacts] = await Promise.all([
+  const [patient, latestRisk, latestReport, recommendationArtifacts, latestDoctorTreatmentPlan] = await Promise.all([
     Patient.findById(patientObjectId).lean(),
     RiskPrediction.findOne({ patient_id: patientObjectId }).sort({ created_at: -1 }).lean(),
     Report.findOne({ patient_id: patientObjectId, type: 'ai_summary' })
       .sort({ created_at: -1 })
       .lean(),
     getLatestRecommendationArtifacts(patientObjectId),
+    getLatestActiveDoctorTreatmentPlanByPatientId(patientId).catch(() => null),
   ]);
 
   if (!patient) {
@@ -384,6 +386,7 @@ async function buildExpressPatientContext(patientId: string) {
     medication_suggestions: medicationSuggestions,
     latest_lifestyle: recommendationArtifacts.latestLifestyle,
     latest_medication: recommendationArtifacts.latestMedication,
+    latest_doctor_treatment_plan: latestDoctorTreatmentPlan,
     latest_report_summary:
       (reportContent.overview as string | undefined) ??
       (reportContent.latest_risk_summary as string | undefined) ??

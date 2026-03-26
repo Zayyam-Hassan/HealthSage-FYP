@@ -17,6 +17,7 @@ from services.medication.context_builder import (
     build_medication_context,
     build_tailoring_summary,
 )
+from services.doctor_treatment_plan_service import get_active_doctor_treatment_plan
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,11 @@ def build_patient_session_context(patient_id: str) -> Dict[str, Any]:
     # 5. Human-readable summary and tailoring hint
     context_summary = build_context_summary(context)
     tailoring_summary = build_tailoring_summary(context)
+    latest_doctor_treatment_plan: Optional[Dict[str, Any]] = None
+    try:
+        latest_doctor_treatment_plan = get_active_doctor_treatment_plan(patient_id)
+    except Exception as e:
+        logger.warning("Latest doctor treatment lookup failed: %s", e)
 
     return {
         "patient_id": patient_id,
@@ -116,6 +122,7 @@ def build_patient_session_context(patient_id: str) -> Dict[str, Any]:
         "risk_snapshot": risk_snapshot,
         "latest_lifestyle": latest_lifestyle,
         "latest_medication": latest_medication,
+        "latest_doctor_treatment_plan": latest_doctor_treatment_plan,
         "patient_display": {
             "full_name": patient.get("full_name"),
             "age": patient.get("age"),

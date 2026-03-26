@@ -20,6 +20,7 @@ import { schedulingRouter } from './routes/scheduling';
 import { treatmentRouter } from './routes/treatment';
 import { reportModuleRouter } from './routes/reportModule';
 import { whatIfRouter } from './routes/whatIf';
+import { doctorTreatmentRouter } from './routes/doctorTreatment';
 
 const app = express();
 const JSON_BODY_LIMIT = '25mb';
@@ -64,6 +65,7 @@ app.use('/api/v1/what-if', whatIfRouter);
 app.use('/api/v1/mongo/medications', medicationsRouter);
 app.use('/api/v1/scheduling', schedulingRouter);
 app.use('/api/v1/treatment', treatmentRouter);
+app.use('/api/v1/doctor-treatment', doctorTreatmentRouter);
 app.use('/api/v1/compatibility', compatibilityRouter);
 app.use('/api/v1/risk', riskRouter);
 app.use('/api/v1/chatbot', chatbotRouter);
