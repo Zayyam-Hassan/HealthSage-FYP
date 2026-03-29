@@ -1,0 +1,89 @@
+%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj
+4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+5 0 obj << /Length 919 >> stream
+BT
+/F1 20 Tf
+50 760 Td
+(Care Guidance Summary for PT-97BCFE) Tj
+ET
+BT
+/F1 13 Tf
+50 728 Td
+(Overview) Tj
+ET
+BT
+/F1 11 Tf
+58 708 Td
+(This report turns the latest AI-supported review into a patient-friendly summary) Tj
+ET
+BT
+/F1 11 Tf
+58 692 Td
+(that the doctor can send when ready.) Tj
+ET
+BT
+/F1 13 Tf
+50 668 Td
+(Risk Summary) Tj
+ET
+BT
+/F1 11 Tf
+58 648 Td
+(Higher diabetes risk \(100%\)) Tj
+ET
+BT
+/F1 13 Tf
+50 624 Td
+(Guidance) Tj
+ET
+BT
+/F1 11 Tf
+58 604 Td
+(This patient has a **high risk** \(risk score ~0.998\) based on the GraphSAGE model.) Tj
+ET
+BT
+/F1 11 Tf
+58 588 Td
+(The predicted outcome suggests significant concern. *Reminder: You remain the) Tj
+ET
+BT
+/F1 11 Tf
+58 572 Td
+(final decision-maker for this patient’s care.*) Tj
+ET
+BT
+/F1 13 Tf
+50 548 Td
+(Lifestyle Recommendations) Tj
+ET
+BT
+/F1 11 Tf
+58 528 Td
+({}) Tj
+ET
+BT
+/F1 13 Tf
+50 504 Td
+(Medication Recommendations) Tj
+ET
+BT
+/F1 11 Tf
+58 484 Td
+({}) Tj
+ET
+endstream endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+1281
+%%EOF
