@@ -41,7 +41,6 @@ yarn-error.log*
 .pnpm-debug.log*
 frontend/dist/
 frontend/node_modules/
-frontend
 
 # IDE
 .idea/
