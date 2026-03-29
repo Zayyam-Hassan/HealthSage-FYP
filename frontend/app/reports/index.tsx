@@ -16,11 +16,12 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import FormInput from '@/components/FormInput';
 import Header from '@/components/Header';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import SuccessPopup from '@/components/SuccessPopup';
 import { colors } from '@/constants/colors';
 import { API_BASE_URL } from '@/services/config';
-import { authService, type UserRole } from '@/services/auth';
+import { authService } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { doctorsService } from '@/services/doctors';
 import { type Patient } from '@/services/patients';
 import {
@@ -120,7 +121,7 @@ function getGeneratedPreview(report: GeneratedReport) {
 export default function ReportsScreen() {
   const router = useRouter();
   const { patientId: queryPatientId } = useLocalSearchParams<{ patientId?: string }>();
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [overview, setOverview] = useState<ReportOverviewResponse | null>(null);
@@ -156,9 +157,8 @@ export default function ReportsScreen() {
   const loadData = useCallback(async () => {
     try {
       setError(null);
-      const currentUser = await authService.getCurrentUser();
+      const currentUser = await refreshUser();
       const currentRole = currentUser?.role ?? null;
-      setRole(currentRole);
 
       if (currentRole === 'doctor') {
         const doctorPatients = (await doctorsService.getMyPatients()).items;
@@ -192,7 +192,7 @@ export default function ReportsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [queryPatientId, selectedPatientId]);
+  }, [queryPatientId, selectedPatientId, refreshUser]);
 
   useEffect(() => {
     loadData();
@@ -341,7 +341,7 @@ export default function ReportsScreen() {
       params: { id: report.id, kind: 'generated' },
     } as any);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
         <AppDialog
@@ -370,9 +370,7 @@ export default function ReportsScreen() {
           onClose={() => setShowSuccess(false)}
         />
         <Header title="Reports" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

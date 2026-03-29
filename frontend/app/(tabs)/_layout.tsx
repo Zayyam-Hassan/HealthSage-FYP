@@ -1,10 +1,10 @@
 import { icons } from "@/constants/icons";
 import { colors } from "@/constants/colors";
 import { Tabs } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Image, View } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { authService, type UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 
 interface TabIconProps {
   focused: boolean;
@@ -48,12 +48,8 @@ const TabIcon = ({ focused, icon }: TabIconProps) => {
 
 const TabsLayout = () => {
   const insets = useSafeAreaInsets();
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { role } = useAuth();
 
-  useEffect(() => {
-    authService.getCurrentUser().then((user) => setRole(user?.role ?? null));
-  }, []);
-  
   return (
     <Tabs
       screenOptions={{

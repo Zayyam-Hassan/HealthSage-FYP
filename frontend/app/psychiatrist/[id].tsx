@@ -7,15 +7,15 @@ import Avatar from '@/components/Avatar';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Header from '@/components/Header';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { colors } from '@/constants/colors';
-import { authService, type UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { doctorsService, type Doctor } from '@/services/doctors';
 
 export default function PsychiatristDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -25,8 +25,7 @@ export default function PsychiatristDetailsScreen() {
     try {
       setLoading(true);
       setError(null);
-      const currentUser = await authService.getCurrentUser();
-      setRole(currentUser?.role ?? null);
+      await refreshUser();
       const doctorData = await doctorsService.getDoctor(id as string);
       setDoctor(doctorData);
     } catch (err: any) {
@@ -58,13 +57,11 @@ export default function PsychiatristDetailsScreen() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
         <Header title="Doctor profile" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

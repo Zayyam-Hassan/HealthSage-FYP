@@ -11,8 +11,8 @@ import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import SectionHeader from '@/components/SectionHeader';
 import RiskIndicator from '@/components/RiskIndicator';
-import Loader from '@/components/Loader';
-import { authService, type UserRole } from '@/services/auth';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { patientsService, Patient } from '@/services/patients';
 import { aiResultsService } from '@/services/aiResults';
 import type { RiskPrediction } from '@/constants/mockRisk';
@@ -20,9 +20,9 @@ import type { RiskPrediction } from '@/constants/mockRisk';
 export default function PatientDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { role } = useAuth();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [riskData, setRiskData] = useState<RiskPrediction | null>(null);
-  const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +41,6 @@ export default function PatientDetailsScreen() {
   }, [id]);
 
   useEffect(() => {
-    authService.getCurrentUser().then((user) => setRole(user?.role ?? null));
     loadPatient();
   }, [loadPatient]);
 
@@ -74,9 +73,7 @@ export default function PatientDetailsScreen() {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
         <Header title="Patient Details" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

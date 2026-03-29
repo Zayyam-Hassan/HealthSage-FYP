@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   RefreshControl,
@@ -13,26 +13,25 @@ import { useRouter } from 'expo-router';
 import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import Header from '@/components/Header';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import SearchBar from '@/components/searchbar';
 import { colors } from '@/constants/colors';
-import { authService, type UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { doctorsService, type Doctor } from '@/services/doctors';
 
 export default function PsychiatristListScreen() {
   const router = useRouter();
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadDoctors = async () => {
+  const loadDoctors = useCallback(async () => {
     try {
       setError(null);
-      const currentUser = await authService.getCurrentUser();
-      setRole(currentUser?.role ?? null);
+      await refreshUser();
       const response = await doctorsService.getDoctors({
         search: searchQuery || undefined,
         page: 1,
@@ -46,11 +45,12 @@ export default function PsychiatristListScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [refreshUser, searchQuery]);
 
   useEffect(() => {
+    if (authLoading) return;
     loadDoctors();
-  }, []);
+  }, [authLoading, loadDoctors]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -77,13 +77,11 @@ export default function PsychiatristListScreen() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
         <Header title={role === 'patient' ? 'Find your doctor' : 'Doctors'} showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

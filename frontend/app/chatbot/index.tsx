@@ -17,9 +17,11 @@ import { useLocalSearchParams } from 'expo-router';
 import * as ExpoLinking from 'expo-linking';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppDialog from '@/components/AppDialog';
+import { formatApiError } from '@/src/shared/utils/formatApiError';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import Header from '@/components/Header';
 import { colors } from '@/constants/colors';
-import { authService, type UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { chatbotService, type ConversationSummary } from '@/services/chatbot';
 import { doctorsService } from '@/services/doctors';
 
@@ -438,7 +440,7 @@ export default function ChatbotScreen() {
     typeof params.seedPrompt === 'string' ? params.seedPrompt : '';
   const requestedAutoSend =
     params.autoSend === '1' || params.autoSend === 'true';
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [patientId, setPatientId] = useState<string | null>(null);
@@ -449,11 +451,7 @@ export default function ChatbotScreen() {
   const [startFreshConversation, setStartFreshConversation] = useState(true);
   const [sending, setSending] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [dialog, setDialog] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-  }>({ visible: false, title: '', message: '' });
+  const { dialog, hideDialog, showDialog } = useAppDialog();
   const flatListRef = useRef<FlatList<Message>>(null);
   const seededPromptSentRef = useRef(false);
 
@@ -468,11 +466,11 @@ export default function ChatbotScreen() {
   );
 
   useEffect(() => {
+    if (authLoading) return;
     (async () => {
       try {
-        const currentUser = await authService.getCurrentUser();
+        const currentUser = await refreshUser();
         const currentRole = currentUser?.role ?? null;
-        setRole(currentRole);
 
         if (currentRole !== 'doctor') {
           setMessages([
@@ -508,7 +506,7 @@ export default function ChatbotScreen() {
         ]);
       }
     })();
-  }, [requestedPatientId]);
+  }, [requestedPatientId, authLoading, refreshUser]);
 
   useEffect(() => {
     if (role !== 'doctor' || !patientId || !requestedSeedPrompt.trim()) {
@@ -582,20 +580,12 @@ export default function ChatbotScreen() {
     if (!text) return;
 
     if (role !== 'doctor') {
-      setDialog({
-        visible: true,
-        title: 'Access restricted',
-        message: 'Only doctors can use the assistant.',
-      });
+      showDialog('Access restricted', 'Only doctors can use the assistant.');
       return;
     }
 
     if (!patientId) {
-      setDialog({
-        visible: true,
-        title: 'Select patient',
-        message: 'Please select a patient first.',
-      });
+      showDialog('Select patient', 'Please select a patient first.');
       return;
     }
 
@@ -657,14 +647,13 @@ export default function ChatbotScreen() {
       await refreshConversationSessions(patientId);
 
       if (response.response?.report_created) {
-        setDialog({
-          visible: true,
-          title: 'Report draft created',
-          message: 'A patient-ready report draft has been added to Reports for doctor review.',
-        });
+        showDialog(
+          'Report draft created',
+          'A patient-ready report draft has been added to Reports for doctor review.',
+        );
       }
-    } catch (err: any) {
-      const errorMsg = err?.message || err?.detail || 'Failed to get response.';
+    } catch (err: unknown) {
+      const errorMsg = formatApiError(err, 'Failed to get response.');
       setMessages((prev) => [
         ...prev,
         {
@@ -707,11 +696,10 @@ export default function ChatbotScreen() {
 
   const handleOpenConversation = async (session: ConversationSummary) => {
     if (!isValidConversationId(session.conversation_id)) {
-      setDialog({
-        visible: true,
-        title: 'Conversation unavailable',
-        message: 'This saved chat session has an invalid id. Refresh the page and try again.',
-      });
+      showDialog(
+        'Conversation unavailable',
+        'This saved chat session has an invalid id. Refresh the page and try again.',
+      );
       return;
     }
 
@@ -724,13 +712,12 @@ export default function ChatbotScreen() {
       setStartFreshConversation(false);
       setMessages(mapTranscriptToMessages(transcript.transcript ?? []));
       setSidebarVisible(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to open conversation:', error);
-      setDialog({
-        visible: true,
-        title: 'Conversation unavailable',
-        message: error?.message || 'This chat session could not be loaded right now.',
-      });
+      showDialog(
+        'Conversation unavailable',
+        formatApiError(error, 'This chat session could not be loaded right now.'),
+      );
     }
   };
 
@@ -871,7 +858,7 @@ export default function ChatbotScreen() {
         visible={dialog.visible}
         title={dialog.title}
         message={dialog.message}
-        onClose={() => setDialog({ visible: false, title: '', message: '' })}
+        onClose={hideDialog}
       />
 
       <Header title="HealthSage Assistant" showBack />

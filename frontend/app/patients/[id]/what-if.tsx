@@ -8,9 +8,11 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Header from '@/components/Header';
 import Input from '@/components/Input';
-import Loader from '@/components/Loader';
 import SectionHeader from '@/components/SectionHeader';
-import { authService, type UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
+import { formatApiError } from '@/src/shared/utils/formatApiError';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import { patientsService, type Patient } from '@/services/patients';
 import {
   whatIfService,
@@ -101,7 +103,7 @@ function areEqualValues(field: WhatIfFeatureField, nextValue: string) {
 export default function PatientWhatIfScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { role, isLoading: authLoading } = useAuth();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [baseline, setBaseline] = useState<WhatIfBaselineResponse | null>(null);
   const [result, setResult] = useState<WhatIfCompareResponse | null>(null);
@@ -113,21 +115,14 @@ export default function PatientWhatIfScreen() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  const [dialog, setDialog] = useState({
-    visible: false,
-    title: '',
-    message: '',
-  });
+  const { dialog, hideDialog, showDialog } = useAppDialog();
 
   useEffect(() => {
+    if (authLoading) return;
     let cancelled = false;
 
     (async () => {
       try {
-        const currentUser = await authService.getCurrentUser();
-        if (cancelled) return;
-        setRole(currentUser?.role ?? null);
-
         const [patientData, baselineData] = await Promise.all([
           patientsService.getPatient(id as string),
           whatIfService.getBaseline(id as string),
@@ -137,13 +132,9 @@ export default function PatientWhatIfScreen() {
         setPatient(patientData);
         setBaseline(baselineData);
         setValues(buildInitialValues(baselineData.modifiable_fields));
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (!cancelled) {
-          setDialog({
-            visible: true,
-            title: 'What-if unavailable',
-            message: error.message || 'Unable to load the what-if workspace.',
-          });
+          showDialog('What-if unavailable', formatApiError(error, 'Unable to load the what-if workspace.'));
         }
       } finally {
         if (!cancelled) {
@@ -155,7 +146,7 @@ export default function PatientWhatIfScreen() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [authLoading, id, showDialog]);
 
   const changedCount = useMemo(() => {
     if (!baseline) return 0;
@@ -208,20 +199,15 @@ export default function PatientWhatIfScreen() {
     setFieldErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
-      setDialog({
-        visible: true,
-        title: 'Check scenario values',
-        message: 'Fix the highlighted fields before running the analysis.',
-      });
+      showDialog('Check scenario values', 'Fix the highlighted fields before running the analysis.');
       return;
     }
 
     if (Object.keys(modifications).length === 0) {
-      setDialog({
-        visible: true,
-        title: 'No changes detected',
-        message: 'Adjust at least one feature from the patient’s current metrics to run a what-if scenario.',
-      });
+      showDialog(
+        'No changes detected',
+        'Adjust at least one feature from the patient’s current metrics to run a what-if scenario.',
+      );
       return;
     }
 
@@ -240,24 +226,18 @@ export default function PatientWhatIfScreen() {
         },
         ...current,
       ]);
-    } catch (error: any) {
-      setDialog({
-        visible: true,
-        title: 'Analysis failed',
-        message: error.message || 'Unable to run the scenario right now.',
-      });
+    } catch (error: unknown) {
+      showDialog('Analysis failed', formatApiError(error, 'Unable to run the scenario right now.'));
     } finally {
       setRunning(false);
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <Header title="What-If Analysis" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }
@@ -286,7 +266,7 @@ export default function PatientWhatIfScreen() {
         visible={dialog.visible}
         title={dialog.title}
         message={dialog.message}
-        onClose={() => setDialog({ visible: false, title: '', message: '' })}
+        onClose={hideDialog}
       />
       <Header title="What-If Analysis" showBack />
       <ScrollView contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>

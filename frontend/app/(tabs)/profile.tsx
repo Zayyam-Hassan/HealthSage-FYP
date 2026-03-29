@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,25 +9,20 @@ import Avatar from '@/components/Avatar';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Header from '@/components/Header';
-import Loader from '@/components/Loader';
-import { authService, type AuthUser } from '@/services/auth';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { doctorsService } from '@/services/doctors';
 import { patientsService } from '@/services/patients';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const { user, refreshUser, logout, isLoading: authLoading } = useAuth();
   const [meta, setMeta] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     try {
-      const currentUser = await authService.getCurrentUser();
-      setUser(currentUser);
+      const currentUser = await refreshUser();
 
       if (currentUser?.role === 'doctor') {
         const doctor = await doctorsService.getDoctorMe();
@@ -45,29 +40,36 @@ export default function ProfileScreen() {
             : 'No doctor assigned yet',
           detail: `Patient ID: ${patient.patient_id}`,
         });
+      } else {
+        setMeta({});
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshUser]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    loadProfile();
+  }, [authLoading, loadProfile]);
 
   useFocusEffect(
     React.useCallback(() => {
-      loadProfile();
-    }, []),
+      if (!authLoading) {
+        loadProfile();
+      }
+    }, [authLoading, loadProfile]),
   );
 
   const handleLogout = async () => {
-    await authService.logout();
+    await logout();
     router.replace('/(auth)/login');
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

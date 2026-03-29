@@ -68,4 +68,8 @@ htmlcov/
 tmp/
 temp/
 .cache/
-.cursor/
+.cursor/g
+mcp.json
+.cgcignore
+*.zip
+*.md

@@ -6,9 +6,9 @@ import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Header from '@/components/Header';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import SectionHeader from '@/components/SectionHeader';
-import { authService } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { chatbotService } from '@/services/chatbot';
 import { patientsService, type Patient } from '@/services/patients';
 import { treatmentService, type DoctorTreatmentPlan } from '@/services/treatment';
@@ -94,6 +94,7 @@ function extractModelLifestyleItems(outputs: CompareAgentOutputs | null): string
 export default function CompareDoctorPlanScreen() {
   const { id } = useLocalSearchParams();
   const patientId = String(id ?? '');
+  const { refreshUser } = useAuth();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [activePlan, setActivePlan] = useState<DoctorTreatmentPlan | null>(null);
   const [outputs, setOutputs] = useState<CompareAgentOutputs | null>(null);
@@ -108,7 +109,7 @@ export default function CompareDoctorPlanScreen() {
     try {
       setLoading(true);
       setError(null);
-      const currentUser = await authService.getCurrentUser();
+      const currentUser = await refreshUser();
       if (currentUser?.role !== 'doctor') {
         setError('Only doctor accounts can compare the doctor plan against model output.');
         return;
@@ -127,7 +128,7 @@ export default function CompareDoctorPlanScreen() {
     } finally {
       setLoading(false);
     }
-  }, [patientId]);
+  }, [patientId, refreshUser]);
 
   useEffect(() => {
     void loadData();
@@ -177,9 +178,7 @@ export default function CompareDoctorPlanScreen() {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <Header title="Compare Doctor Plan" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

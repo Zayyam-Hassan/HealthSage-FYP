@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import SearchBar from '@/components/searchbar';
 import MedicationCard from '@/components/MedicationCard';
 import EmptyState from '@/components/EmptyState';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { medicationsService, Medication } from '@/services/medications';
 
 export default function MedicationsListScreen() {
@@ -58,9 +58,7 @@ export default function MedicationsListScreen() {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <Header title="Medications" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

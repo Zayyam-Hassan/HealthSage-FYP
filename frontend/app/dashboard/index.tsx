@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Card from '@/components/Card';
 import Header from '@/components/Header';
-import { authService, type UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 
 type DashboardLink = {
   id: string;
@@ -75,11 +75,7 @@ const patientLinks: DashboardLink[] = [
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const [role, setRole] = useState<UserRole | null>(null);
-
-  useEffect(() => {
-    authService.getCurrentUser().then((user) => setRole(user?.role ?? null));
-  }, []);
+  const { role } = useAuth();
 
   const links = role === 'doctor' ? doctorLinks : patientLinks;
 

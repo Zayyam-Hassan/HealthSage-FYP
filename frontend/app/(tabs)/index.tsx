@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   RefreshControl,
@@ -13,10 +13,10 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '@/constants/colors';
 import Card from '@/components/Card';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import SearchBar from '@/components/searchbar';
 import { appointmentsService, type Appointment } from '@/services/appointments';
-import { authService, type UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import {
   doctorsService,
   type Doctor,
@@ -42,6 +42,47 @@ type WorkspaceLink = {
   icon: IonIconName;
 };
 
+/** Same destinations + copy as `app/dashboard` — compact title + description cards (patient home). */
+type PatientDashboardLink = {
+  id: string;
+  title: string;
+  description: string;
+  route: string;
+};
+
+const patientDashboardLinks: PatientDashboardLink[] = [
+  {
+    id: 'assessment',
+    title: 'Health form',
+    description: 'Update glucose, HbA1c, vitals, and lifestyle details.',
+    route: '/assessment',
+  },
+  {
+    id: 'doctor',
+    title: 'Choose doctor',
+    description: 'Send a request to a doctor from the directory.',
+    route: '/psychiatrist',
+  },
+  {
+    id: 'reports',
+    title: 'Reports',
+    description: 'Review your saved medical reports.',
+    route: '/reports',
+  },
+  {
+    id: 'appointments',
+    title: 'Scheduling',
+    description: 'Browse available slots and book instantly.',
+    route: '/appointments',
+  },
+  {
+    id: 'chatbot',
+    title: 'Assistant',
+    description: 'Ask questions with your saved profile context.',
+    route: '/chatbot',
+  },
+];
+
 /** Single strip of destinations — avoids repeating the same routes in multiple card grids */
 const doctorWorkspaceLinks: WorkspaceLink[] = [
   { id: 'patients', title: 'Patients', route: '/patients', icon: 'people-outline' },
@@ -49,12 +90,6 @@ const doctorWorkspaceLinks: WorkspaceLink[] = [
   { id: 'reports', title: 'Reports', route: '/reports', icon: 'document-text-outline' },
   { id: 'risk', title: 'Risk', route: '/risk', icon: 'pulse-outline' },
   { id: 'chatbot', title: 'Assistant', route: '/chatbot', icon: 'chatbubbles-outline' },
-];
-
-/** Patient home: routes not duplicated in other sections (reports & scheduling live in their own blocks). */
-const patientCareLinksFull: WorkspaceLink[] = [
-  { id: 'assessment', title: 'Health form', route: '/assessment', icon: 'clipboard-outline' },
-  { id: 'doctors', title: 'Find doctors', route: '/psychiatrist', icon: 'medkit-outline' },
 ];
 
 function formatDate(dateString: string) {
@@ -84,8 +119,8 @@ function getAppointmentDisplay(appointment: Appointment) {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
-  const [userDisplayName, setUserDisplayName] = useState('');
+  const { user, role: userRole, refreshUser, isLoading: authLoading } = useAuth();
+  const userDisplayName = user?.display_name?.trim() ?? '';
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [popularDoctors, setPopularDoctors] = useState<Doctor[]>([]);
   const [myPatients, setMyPatients] = useState<Patient[]>([]);
@@ -100,12 +135,10 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      const currentUser = await authService.getCurrentUser();
+      const currentUser = await refreshUser();
       const role = currentUser?.role ?? null;
-      setUserRole(role);
-      setUserDisplayName(currentUser?.display_name?.trim() || '');
 
       if (role === 'doctor') {
         const [appointmentRes, patientsRes, requestsRes] = await Promise.all([
@@ -156,16 +189,19 @@ export default function HomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [refreshUser]);
 
   useEffect(() => {
+    if (authLoading) return;
     loadData();
-  }, []);
+  }, [authLoading, loadData]);
 
   useFocusEffect(
     React.useCallback(() => {
-      loadData();
-    }, []),
+      if (!authLoading) {
+        loadData();
+      }
+    }, [authLoading, loadData]),
   );
 
   const onRefresh = () => {
@@ -178,16 +214,7 @@ export default function HomeScreen() {
     popularDoctors.length > 0 &&
     !myProfile?.assignment.doctor;
 
-  const patientQuickLinks: WorkspaceLink[] = patientDiscoveryCarouselVisible
-    ? [
-        {
-          id: 'assessment',
-          title: 'Health form',
-          route: '/assessment',
-          icon: 'clipboard-outline',
-        },
-      ]
-    : patientCareLinksFull;
+  const upcomingPatientCount = appointments.filter((a) => a.status === 'booked').length;
 
   const renderUpcomingAppointments = () => (
     <View className="mb-5">
@@ -250,12 +277,10 @@ export default function HomeScreen() {
     </View>
   );
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }
@@ -323,21 +348,35 @@ export default function HomeScreen() {
                 </View>
               </View>
             ) : (
-              <View className="bg-white rounded-[18px] p-4 border border-coral-soft">
-                <Text className="text-base font-semibold text-text mb-1">
-                  {myProfile?.assignment.doctor
-                    ? `Care team · ${myProfile.assignment.doctor.name}`
-                    : myProfile?.assignment.pending_request
-                      ? 'Doctor request pending'
-                      : 'No doctor assigned yet'}
-                </Text>
-                <Text className="text-sm text-text-secondary leading-5">
-                  {myProfile?.assignment.doctor
-                    ? `${myProfile.assignment.doctor.specialization} is linked. Use scheduling below when you are ready.`
-                    : myProfile?.assignment.pending_request
-                      ? 'Your selected doctor still needs to confirm the relationship.'
-                      : 'Browse the directory and send a request to get started.'}
-                </Text>
+              <View className="flex-row flex-wrap justify-between">
+                <View className="w-[48%] mb-0 bg-white rounded-[18px] p-4 border border-coral-soft">
+                  <Text className="text-[11px] font-semibold uppercase tracking-wide text-coral-deep mb-1">
+                    Care team
+                  </Text>
+                  <Text className="text-lg font-bold text-coral-ink leading-6" numberOfLines={2}>
+                    {myProfile?.assignment.doctor
+                      ? myProfile.assignment.doctor.name
+                      : myProfile?.assignment.pending_request
+                        ? 'Pending'
+                        : '—'}
+                  </Text>
+                  <Text className="text-sm text-text-secondary mt-1 leading-5" numberOfLines={3}>
+                    {myProfile?.assignment.doctor
+                      ? myProfile.assignment.doctor.specialization
+                      : myProfile?.assignment.pending_request
+                        ? 'Waiting for your doctor to confirm.'
+                        : 'No doctor linked yet.'}
+                  </Text>
+                </View>
+                <View className="w-[48%] mb-0 bg-white rounded-[18px] p-4 border border-coral-soft">
+                  <Text className="text-3xl font-bold text-coral-ink">
+                    {upcomingPatientCount}
+                  </Text>
+                  <Text className="text-sm text-text-secondary mt-1">Booked visits</Text>
+                  <Text className="text-xs text-text-tertiary mt-2 leading-4">
+                    Count of upcoming appointments on your schedule.
+                  </Text>
+                </View>
               </View>
             )}
           </Card>
@@ -373,34 +412,28 @@ export default function HomeScreen() {
             </View>
           ) : (
             <View className="mb-6">
-              <Text className="text-lg font-semibold text-text mb-1">Next steps</Text>
+              <Text className="text-lg font-semibold text-text mb-1">Your workspace</Text>
               <Text className="text-sm text-text-secondary mb-3 leading-5">
                 {patientDiscoveryCarouselVisible
-                  ? 'Complete your health form—find a clinician from the discovery strip below; scheduling and documents stay in their own sections.'
-                  : 'Health data and directory search—scheduling and documents have dedicated sections below.'}
+                  ? 'Shortcuts match the patient dashboard—use the discovery strip below to pick a clinician.'
+                  : 'Same layout as the doctor dashboard: tap a card to open health tools, scheduling, and more.'}
               </Text>
-              <View
-                className={`flex-row gap-3 ${patientQuickLinks.length === 1 ? 'justify-start' : ''}`}
-              >
-                {patientQuickLinks.map((link) => (
+              <View className="flex-row flex-wrap justify-between">
+                {patientDashboardLinks.map((item) => (
                   <TouchableOpacity
-                    key={link.id}
-                    activeOpacity={0.88}
-                    onPress={() => router.push(link.route as any)}
+                    key={item.id}
+                    onPress={() => router.push(item.route as any)}
+                    className="w-[48%] mb-4"
+                    activeOpacity={0.8}
                     accessibilityRole="button"
-                    accessibilityLabel={link.title}
-                    className={
-                      patientQuickLinks.length === 1 ? 'w-[48%] max-w-[220px]' : 'flex-1 min-w-0'
-                    }
+                    accessibilityLabel={`${item.title}. ${item.description}`}
                   >
-                    <View className="rounded-[18px] bg-surface-soft border border-coral-soft px-3 py-3.5 items-center shadow-sm">
-                      <View className="w-11 h-11 rounded-[14px] bg-coral-muted items-center justify-center mb-2">
-                        <Ionicons name={link.icon} size={22} color={colors.coral.ink} />
-                      </View>
-                      <Text className="text-[11px] font-semibold text-text text-center leading-4">
-                        {link.title}
+                    <Card className="min-h-[152px] border-coral-soft bg-surface-soft flex flex-col justify-between">
+                      <Text className="text-base font-semibold text-text tracking-tight">
+                        {item.title}
                       </Text>
-                    </View>
+                      <Text className="text-sm text-text-secondary leading-5">{item.description}</Text>
+                    </Card>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -503,9 +536,9 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 )}
               </View>
-              <Card className="border-coral-soft bg-surface-soft overflow-hidden">
-                <View className="mb-4 pb-4 border-b border-border/60">
-                  <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep mb-1">
+              <View className="flex-row flex-wrap justify-between">
+                <Card className="w-full mb-3 border-coral-soft bg-surface-soft">
+                  <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep mb-2">
                     Doctor plan
                   </Text>
                   {!activeDoctorTreatmentPlan ? (
@@ -531,49 +564,51 @@ export default function HomeScreen() {
                       ) : null}
                     </>
                   )}
-                </View>
-                <View>
+                </Card>
+
+                <Card className="w-[48%] mb-3 min-h-[120px] border-coral-soft bg-surface-soft">
                   <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep mb-2">
-                    Active care
+                    Medication
                   </Text>
-                  {!treatmentOverview?.active_prescriptions?.length &&
-                  !treatmentOverview?.active_lifestyle_plans?.length ? (
+                  {!treatmentOverview?.active_prescriptions?.[0] ? (
                     <Text className="text-sm text-text-secondary leading-5">
-                      No active prescription or lifestyle plan from your care team yet.
+                      No active prescription from your care team yet.
                     </Text>
                   ) : (
-                    <View>
-                      {treatmentOverview?.active_prescriptions?.[0] ? (
-                        <View className="mb-3">
-                          <Text className="text-sm font-semibold text-text">Medication</Text>
-                          <Text className="text-sm text-text-secondary mt-0.5">
-                            {treatmentOverview.active_prescriptions[0].medications[0]
-                              ? `${treatmentOverview.active_prescriptions[0].medications[0].medication_name} · ${treatmentOverview.active_prescriptions[0].status}`
-                              : `Prescription · ${treatmentOverview.active_prescriptions[0].status}`}
-                          </Text>
-                          {treatmentOverview.active_prescriptions[0].medications.length > 1 ? (
-                            <Text className="text-xs text-text-tertiary mt-1">
-                              +{treatmentOverview.active_prescriptions[0].medications.length - 1}{' '}
-                              more in your full record
-                            </Text>
-                          ) : null}
-                        </View>
+                    <>
+                      <Text className="text-sm text-text-secondary leading-5">
+                        {treatmentOverview.active_prescriptions[0].medications[0]
+                          ? `${treatmentOverview.active_prescriptions[0].medications[0].medication_name} · ${treatmentOverview.active_prescriptions[0].status}`
+                          : `Prescription · ${treatmentOverview.active_prescriptions[0].status}`}
+                      </Text>
+                      {treatmentOverview.active_prescriptions[0].medications.length > 1 ? (
+                        <Text className="text-xs text-text-tertiary mt-2">
+                          +{treatmentOverview.active_prescriptions[0].medications.length - 1} more in
+                          your full record
+                        </Text>
                       ) : null}
-                      {treatmentOverview?.active_lifestyle_plans?.[0] ? (
-                        <View>
-                          <Text className="text-sm font-semibold text-text">Lifestyle</Text>
-                          <Text className="text-sm text-text-secondary mt-0.5" numberOfLines={3}>
-                            {treatmentOverview.active_lifestyle_plans[0].diet_plan ||
-                              treatmentOverview.active_lifestyle_plans[0].follow_up_note ||
-                              treatmentOverview.active_lifestyle_plans[0].exercise_plan ||
-                              `Plan active · ${treatmentOverview.active_lifestyle_plans[0].status}`}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
+                    </>
                   )}
-                </View>
-              </Card>
+                </Card>
+
+                <Card className="w-[48%] mb-3 min-h-[120px] border-coral-soft bg-surface-soft">
+                  <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep mb-2">
+                    Lifestyle
+                  </Text>
+                  {!treatmentOverview?.active_lifestyle_plans?.[0] ? (
+                    <Text className="text-sm text-text-secondary leading-5">
+                      No active lifestyle plan from your care team yet.
+                    </Text>
+                  ) : (
+                    <Text className="text-sm text-text-secondary leading-5" numberOfLines={5}>
+                      {treatmentOverview.active_lifestyle_plans[0].diet_plan ||
+                        treatmentOverview.active_lifestyle_plans[0].follow_up_note ||
+                        treatmentOverview.active_lifestyle_plans[0].exercise_plan ||
+                        `Plan active · ${treatmentOverview.active_lifestyle_plans[0].status}`}
+                    </Text>
+                  )}
+                </Card>
+              </View>
               {myProfile?.id &&
               (doctorTreatmentHistory.some((item) => item.status !== 'active') ||
                 (treatmentOverview?.prescription_history?.filter((item) => item.status !== 'active')
@@ -613,55 +648,77 @@ export default function HomeScreen() {
                   </Text>
                 </Card>
               ) : (
-                <Card padding="none" className="border-coral-soft bg-surface-soft overflow-hidden">
-                  {reportOverview?.uploaded_reports?.slice(0, 1).map((report) => (
-                    <TouchableOpacity
-                      key={report.id}
-                      activeOpacity={0.85}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/reports/[id]',
-                          params: { id: report.id, kind: 'uploaded' },
-                        } as any)
-                      }
-                      className="px-4 py-4 border-b border-border/50"
-                    >
-                      <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep mb-1">
-                        Uploaded
-                      </Text>
-                      <Text className="text-base font-semibold text-text">{report.title}</Text>
-                      <Text className="text-sm text-text-secondary mt-1">
-                        {report.category.replace(/_/g, ' ')} · {formatDate(report.created_at)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                  {reportOverview?.generated_reports?.slice(0, 1).map((report) => (
-                    <TouchableOpacity
-                      key={report.id}
-                      activeOpacity={0.85}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/reports/[id]',
-                          params: { id: report.id, kind: 'generated' },
-                        } as any)
-                      }
-                      className="px-4 py-4"
-                    >
-                      <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep mb-1">
-                        Generated
-                      </Text>
-                      <Text className="text-base font-semibold text-text">{report.title}</Text>
-                      <Text className="text-sm text-text-secondary mt-1">
-                        {formatDate(report.created_at)}
-                      </Text>
-                      {report.summary ? (
-                        <Text className="mt-2 text-sm text-text-secondary leading-5" numberOfLines={2}>
-                          {report.summary}
-                        </Text>
+                (() => {
+                  const uploaded = reportOverview?.uploaded_reports?.[0];
+                  const generated = reportOverview?.generated_reports?.[0];
+                  const both = Boolean(uploaded && generated);
+                  const col = both ? 'w-[48%]' : 'w-full';
+
+                  return (
+                    <View className="flex-row flex-wrap justify-between">
+                      {uploaded ? (
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/reports/[id]',
+                              params: { id: uploaded.id, kind: 'uploaded' },
+                            } as any)
+                          }
+                          className={`${col} mb-3`}
+                          accessibilityRole="button"
+                          accessibilityLabel="Open latest uploaded report"
+                        >
+                          <Card className="min-h-[120px] border-coral-soft bg-surface-soft">
+                            <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep mb-1">
+                              Uploaded
+                            </Text>
+                            <Text className="text-base font-semibold text-text" numberOfLines={2}>
+                              {uploaded.title}
+                            </Text>
+                            <Text className="text-sm text-text-secondary mt-1" numberOfLines={2}>
+                              {uploaded.category.replace(/_/g, ' ')} · {formatDate(uploaded.created_at)}
+                            </Text>
+                          </Card>
+                        </TouchableOpacity>
                       ) : null}
-                    </TouchableOpacity>
-                  ))}
-                </Card>
+                      {generated ? (
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/reports/[id]',
+                              params: { id: generated.id, kind: 'generated' },
+                            } as any)
+                          }
+                          className={`${col} mb-3`}
+                          accessibilityRole="button"
+                          accessibilityLabel="Open latest generated report"
+                        >
+                          <Card className="min-h-[120px] border-coral-soft bg-surface-soft">
+                            <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep mb-1">
+                              Generated
+                            </Text>
+                            <Text className="text-base font-semibold text-text" numberOfLines={2}>
+                              {generated.title}
+                            </Text>
+                            <Text className="text-sm text-text-secondary mt-1">
+                              {formatDate(generated.created_at)}
+                            </Text>
+                            {generated.summary ? (
+                              <Text
+                                className="mt-2 text-sm text-text-secondary leading-5"
+                                numberOfLines={2}
+                              >
+                                {generated.summary}
+                              </Text>
+                            ) : null}
+                          </Card>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  );
+                })()
               )}
             </View>
           )}

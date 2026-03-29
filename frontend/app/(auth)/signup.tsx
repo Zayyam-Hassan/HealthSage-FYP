@@ -11,14 +11,17 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppDialog from '@/components/AppDialog';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
 import { images } from '@/constants/images';
 import { authService } from '@/services/auth';
 import type { UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 
 export default function SignupScreen() {
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,12 +34,7 @@ export default function SignupScreen() {
     confirmPassword?: string;
   }>({});
   const [loading, setLoading] = useState(false);
-  const [dialog, setDialog] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    actions?: { label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'danger' }[];
-  }>({ visible: false, title: '', message: '' });
+  const { dialog, hideDialog, showDialog } = useAppDialog();
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -95,21 +93,23 @@ export default function SignupScreen() {
       }
 
       if (signupResponse.role === 'doctor' || signupResponse.role === 'patient') {
-        setDialog({
-          visible: true,
-          title: 'Signup successful',
-          message: 'Your account has been created successfully.',
-          actions: [{ label: 'Continue', onPress: () => router.replace('/(tabs)') }],
-        });
+        showDialog('Signup successful', 'Your account has been created successfully.', [
+          {
+            label: 'Continue',
+            onPress: async () => {
+              await refreshUser();
+              router.replace('/(tabs)');
+            },
+          },
+        ]);
       } else {
         throw new Error('Unexpected user role received from server');
       }
     } catch (error: any) {
-      setDialog({
-        visible: true,
-        title: 'Signup failed',
-        message: error.message || error.detail || 'Failed to create account. Please try again.',
-      });
+      showDialog(
+        'Signup failed',
+        error.message || error.detail || 'Failed to create account. Please try again.',
+      );
     } finally {
       setLoading(false);
     }
@@ -122,7 +122,7 @@ export default function SignupScreen() {
         title={dialog.title}
         message={dialog.message}
         actions={dialog.actions}
-        onClose={() => setDialog((current) => ({ ...current, visible: false }))}
+        onClose={hideDialog}
       />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

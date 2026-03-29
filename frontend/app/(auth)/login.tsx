@@ -12,26 +12,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppDialog from '@/components/AppDialog';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
 import { colors } from '@/constants/colors';
 import { images } from '@/constants/images';
 import { authService } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    actions?: { label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'danger' }[];
-  }>({ visible: false, title: '', message: '' });
+  const { dialog, hideDialog, showDialog } = useAppDialog();
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -74,12 +72,15 @@ export default function LoginScreen() {
       }
 
       if (user.role === 'doctor' || user.role === 'patient') {
-        setDialog({
-          visible: true,
-          title: 'Login successful',
-          message: 'You have logged in successfully.',
-          actions: [{ label: 'Continue', onPress: () => router.replace('/(tabs)') }],
-        });
+        showDialog('Login successful', 'You have logged in successfully.', [
+          {
+            label: 'Continue',
+            onPress: async () => {
+              await refreshUser();
+              router.replace('/(tabs)');
+            },
+          },
+        ]);
       } else {
         throw new Error('Unexpected user role received from server');
       }
@@ -94,11 +95,10 @@ export default function LoginScreen() {
       ) {
         setAuthError('Failed login, check credentials');
       } else {
-        setDialog({
-          visible: true,
-          title: 'Login failed',
-          message: error?.message || error?.detail || 'Something went wrong. Please try again.',
-        });
+        showDialog(
+          'Login failed',
+          error?.message || error?.detail || 'Something went wrong. Please try again.',
+        );
       }
     } finally {
       setLoading(false);
@@ -112,7 +112,7 @@ export default function LoginScreen() {
         title={dialog.title}
         message={dialog.message}
         actions={dialog.actions}
-        onClose={() => setDialog((current) => ({ ...current, visible: false }))}
+        onClose={hideDialog}
       />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

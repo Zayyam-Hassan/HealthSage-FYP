@@ -6,9 +6,11 @@ import AppDialog from '@/components/AppDialog';
 import Header from '@/components/Header';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
+import { formatApiError } from '@/src/shared/utils/formatApiError';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import { aiResultsService } from '@/services/aiResults';
-import { authService, type UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { patientsService } from '@/services/patients';
 
 type FeatureBar = {
@@ -18,7 +20,7 @@ type FeatureBar = {
 
 export default function RiskPredictionScreen() {
   const router = useRouter();
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { role, isLoading: authLoading } = useAuth();
   const [patientId, setPatientId] = useState('');
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -27,18 +29,13 @@ export default function RiskPredictionScreen() {
   const [riskClass, setRiskClass] = useState<'low' | 'medium' | 'high'>('low');
   const [summary, setSummary] = useState('');
   const [featureBars, setFeatureBars] = useState<FeatureBar[]>([]);
-  const [dialog, setDialog] = useState({
-    visible: false,
-    title: '',
-    message: '',
-  });
+  const { dialog, hideDialog, showDialog } = useAppDialog();
 
   useEffect(() => {
+    if (authLoading) return;
     (async () => {
       try {
-        const currentUser = await authService.getCurrentUser();
-        setRole(currentUser?.role ?? null);
-        if (currentUser?.role !== 'doctor') {
+        if (role !== 'doctor') {
           setPatients([]);
           setPatientId('');
           return;
@@ -54,15 +51,11 @@ export default function RiskPredictionScreen() {
         setScreenLoading(false);
       }
     })();
-  }, []);
+  }, [authLoading, role]);
 
   const runPrediction = async () => {
     if (!patientId) {
-      setDialog({
-        visible: true,
-        title: 'Select a patient',
-        message: 'Choose a patient before running the model.',
-      });
+      showDialog('Select a patient', 'Choose a patient before running the model.');
       return;
     }
 
@@ -79,24 +72,18 @@ export default function RiskPredictionScreen() {
           percent: Math.max(8, 100 - index * 12),
         })),
       );
-    } catch (error: any) {
-      setDialog({
-        visible: true,
-        title: 'Prediction failed',
-        message: error.message || 'Please try again.',
-      });
+    } catch (error: unknown) {
+      showDialog('Prediction failed', formatApiError(error, 'Please try again.'));
     } finally {
       setLoading(false);
     }
   };
 
-  if (screenLoading) {
+  if (authLoading || screenLoading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
         <Header title="Risk Dashboard" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }
@@ -133,7 +120,8 @@ export default function RiskPredictionScreen() {
         visible={dialog.visible}
         title={dialog.title}
         message={dialog.message}
-        onClose={() => setDialog({ visible: false, title: '', message: '' })}
+        actions={dialog.actions}
+        onClose={hideDialog}
       />
       <Header title="Risk Dashboard" showBack />
       <ScrollView

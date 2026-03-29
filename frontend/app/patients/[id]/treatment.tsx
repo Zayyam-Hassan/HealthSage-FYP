@@ -8,9 +8,9 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import FormInput from '@/components/FormInput';
 import Header from '@/components/Header';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import SectionHeader from '@/components/SectionHeader';
-import { authService } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { patientsService, type Patient } from '@/services/patients';
 import {
   treatmentService,
@@ -146,6 +146,7 @@ function hasAnyMedicationValue(item: MedicationFormItem) {
 export default function PatientTreatmentScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [plans, setPlans] = useState<DoctorTreatmentPlan[]>([]);
   const [form, setForm] = useState<TreatmentPlanForm>(emptyForm);
@@ -171,7 +172,7 @@ export default function PatientTreatmentScreen() {
     try {
       setLoading(true);
       setError(null);
-      const currentUser = await authService.getCurrentUser();
+      const currentUser = await refreshUser();
       if (currentUser?.role !== 'doctor') {
         setError('Only doctor accounts can manage doctor-authored treatment plans.');
         return;
@@ -192,7 +193,7 @@ export default function PatientTreatmentScreen() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, refreshUser]);
 
   useEffect(() => {
     loadData();
@@ -347,9 +348,7 @@ export default function PatientTreatmentScreen() {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <Header title="Doctor Treatment Plan" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

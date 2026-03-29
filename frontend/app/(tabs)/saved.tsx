@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -6,10 +6,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import AppointmentCard from '@/components/Card/AppointmentCard';
 import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import ReportCard from '@/components/Card/ReportCard';
 import { appointmentsService } from '@/services/appointments';
-import { authService, type UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import {
   reportsService,
   type ReportOverviewResponse,
@@ -17,17 +17,16 @@ import {
 
 export default function SavedScreen() {
   const router = useRouter();
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'appointments' | 'reports'>('appointments');
   const [appointments, setAppointments] = useState<any[]>([]);
   const [reportOverview, setReportOverview] = useState<ReportOverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadRecords = async () => {
+  const loadRecords = useCallback(async () => {
     try {
-      const currentUser = await authService.getCurrentUser();
+      const currentUser = await refreshUser();
       const currentRole = currentUser?.role ?? null;
-      setRole(currentRole);
       const [appointmentRes, reportRes] = await Promise.all([
         currentRole === 'doctor'
           ? appointmentsService.getDoctorAppointments({ limit: 50 })
@@ -41,24 +40,25 @@ export default function SavedScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshUser]);
 
   useEffect(() => {
+    if (authLoading) return;
     loadRecords();
-  }, []);
+  }, [authLoading, loadRecords]);
 
   useFocusEffect(
     React.useCallback(() => {
-      loadRecords();
-    }, []),
+      if (!authLoading) {
+        loadRecords();
+      }
+    }, [authLoading, loadRecords]),
   );
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

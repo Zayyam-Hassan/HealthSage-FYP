@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, ScrollView, Text, TouchableOpacity, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,9 +6,9 @@ import { useRouter } from 'expo-router';
 import Header from '@/components/Header';
 import Card from '@/components/Card';
 import Avatar from '@/components/Avatar';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { colors } from '@/constants/colors';
-import { authService, type AuthUser } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -34,17 +34,9 @@ type Section =
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, isLoading: loading } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
-
-  useEffect(() => {
-    authService.getCurrentUser().then((u) => {
-      setUser(u);
-      setLoading(false);
-    });
-  }, []);
 
   const settingsSections: Section[] = [
     {
@@ -89,9 +81,7 @@ export default function SettingsScreen() {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
         <Header title="Settings" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

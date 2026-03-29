@@ -6,9 +6,10 @@ import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Header from '@/components/Header';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { API_BASE_URL } from '@/services/config';
-import { authService, type UserRole } from '@/services/auth';
+import { authService } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import {
   reportsService,
   type GeneratedReport,
@@ -43,7 +44,7 @@ function formatDate(value: string) {
 export default function ReportDetailsScreen() {
   const { id, kind } = useLocalSearchParams<{ id: string; kind?: 'uploaded' | 'generated' }>();
   const router = useRouter();
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { role, isLoading: authLoading } = useAuth();
   const [uploadedReport, setUploadedReport] = useState<UploadedReport | null>(null);
   const [generatedReport, setGeneratedReport] = useState<GeneratedReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,8 +59,6 @@ export default function ReportDetailsScreen() {
     (async () => {
       try {
         setLoading(true);
-        const currentUser = await authService.getCurrentUser();
-        setRole(currentUser?.role ?? null);
 
         if (effectiveKind === 'uploaded') {
           setUploadedReport(await reportsService.getUploadedReport(id));
@@ -76,13 +75,11 @@ export default function ReportDetailsScreen() {
     })();
   }, [effectiveKind, id]);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <Header title="Report Details" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   RefreshControl,
@@ -14,11 +14,11 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import Header from '@/components/Header';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import PatientCard from '@/components/PatientCard';
 import SearchBar from '@/components/searchbar';
 import { colors } from '@/constants/colors';
-import { authService, type UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import {
   doctorsService,
   type DoctorAssignmentRequest,
@@ -27,8 +27,8 @@ import { patientsService, type Patient } from '@/services/patients';
 
 export default function PatientsListScreen() {
   const router = useRouter();
+  const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [role, setRole] = useState<UserRole | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [requests, setRequests] = useState<DoctorAssignmentRequest[]>([]);
   const [selfPatient, setSelfPatient] = useState<Patient | null>(null);
@@ -36,12 +36,11 @@ export default function PatientsListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setError(null);
-      const currentUser = await authService.getCurrentUser();
+      const currentUser = await refreshUser();
       const currentRole = currentUser?.role ?? null;
-      setRole(currentRole);
 
       if (currentRole === 'doctor') {
         const [patientsRes, requestsRes] = await Promise.all([
@@ -64,11 +63,12 @@ export default function PatientsListScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [refreshUser]);
 
   useEffect(() => {
+    if (authLoading) return;
     loadData();
-  }, []);
+  }, [authLoading, loadData]);
 
   const filteredPatients = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -101,13 +101,11 @@ export default function PatientsListScreen() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
         <Header title="Patients" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

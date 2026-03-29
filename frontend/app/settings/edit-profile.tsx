@@ -15,15 +15,16 @@ import Avatar from '@/components/Avatar';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Header from '@/components/Header';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { colors } from '@/constants/colors';
-import { authService, type UserRole } from '@/services/auth';
+import { authService } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { doctorsService } from '@/services/doctors';
 import { patientsService } from '@/services/patients';
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { user: authUser, role, isLoading: authLoading, refreshUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -37,27 +38,29 @@ export default function EditProfileScreen() {
   });
 
   useEffect(() => {
+    if (authLoading) return;
     (async () => {
       try {
-        const currentUser = await authService.getCurrentUser();
-        setRole(currentUser?.role ?? null);
+        if (!authUser) {
+          return;
+        }
 
-        if (currentUser?.role === 'doctor') {
+        if (authUser.role === 'doctor') {
           const doctor = await doctorsService.getDoctorMe();
           setForm({
-            display_name: currentUser.display_name,
-            email: currentUser.email,
+            display_name: authUser.display_name,
+            email: authUser.email,
             full_name: '',
             specialization: doctor.specialization || '',
             phone: doctor.phone || '',
             bio: doctor.bio || '',
             accepting_patients: doctor.accepting_patients ?? true,
           });
-        } else if (currentUser?.role === 'patient') {
+        } else if (authUser.role === 'patient') {
           const patient = await patientsService.getMyPatientProfile();
           setForm({
-            display_name: currentUser?.display_name || patient.full_name,
-            email: currentUser?.email || '',
+            display_name: authUser.display_name || patient.full_name,
+            email: authUser.email || '',
             full_name: patient.full_name || '',
             specialization: '',
             phone: '',
@@ -69,7 +72,7 @@ export default function EditProfileScreen() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [authLoading, authUser]);
 
   const updateField = (field: string, value: string | boolean) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -93,6 +96,8 @@ export default function EditProfileScreen() {
         accepting_patients: role === 'doctor' ? form.accepting_patients : undefined,
       });
 
+      await refreshUser();
+
       Alert.alert('Profile updated', 'Your information has been saved successfully.', [
         { text: 'OK', onPress: () => router.back() },
       ]);
@@ -103,13 +108,11 @@ export default function EditProfileScreen() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <Header title="Edit Profile" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

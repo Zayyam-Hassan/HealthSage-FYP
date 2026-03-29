@@ -7,7 +7,7 @@ import Card from '@/components/Card';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import SectionHeader from '@/components/SectionHeader';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { medicationsService, Medication } from '@/services/medications';
 
 export default function MedicationDetailsScreen() {
@@ -39,9 +39,7 @@ export default function MedicationDetailsScreen() {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <Header title="Medication Details" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

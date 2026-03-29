@@ -21,7 +21,6 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import Header from '@/components/Header';
-import Loader from '@/components/Loader';
 import Select from '@/components/Select';
 import {
   appointmentsService,
@@ -30,10 +29,13 @@ import {
   type Availability,
   type SchedulingWeekday,
 } from '@/services/appointments';
-import { authService, type UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { doctorsService, type Doctor } from '@/services/doctors';
 import { patientsService } from '@/services/patients';
 import { colors } from '@/constants/colors';
+import { formatApiError } from '@/src/shared/utils/formatApiError';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 
 const weekdays: { label: string; value: SchedulingWeekday }[] = [
   { label: 'Sun', value: 'sunday' },
@@ -142,7 +144,7 @@ function TimeField({
 export default function AppointmentsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ doctor_id?: string }>();
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,12 +169,7 @@ export default function AppointmentsScreen() {
     visible: boolean;
     field: 'start_time' | 'end_time' | 'break_start_time' | 'break_end_time' | null;
   }>({ visible: false, field: null });
-  const [dialog, setDialog] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    actions?: { label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'danger' }[];
-  }>({ visible: false, title: '', message: '' });
+  const { dialog, hideDialog, showDialog } = useAppDialog();
 
   const selectedDoctor = useMemo(
     () => doctors.find((doctor) => doctor.id === selectedDoctorId) ?? null,
@@ -278,9 +275,8 @@ export default function AppointmentsScreen() {
   const loadData = useCallback(async () => {
     try {
       setError(null);
-      const currentUser = await authService.getCurrentUser();
+      const currentUser = await refreshUser();
       const currentRole = currentUser?.role ?? null;
-      setRole(currentRole);
 
       if (currentRole === 'doctor') {
         await loadDoctorData();
@@ -295,12 +291,12 @@ export default function AppointmentsScreen() {
         setPatientAppointments([]);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to load scheduling');
+      setError(formatApiError(err, 'Failed to load scheduling'));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loadDoctorData, loadPatientData]);
+  }, [loadDoctorData, loadPatientData, refreshUser]);
 
   useEffect(() => {
     loadData();
@@ -319,7 +315,7 @@ export default function AppointmentsScreen() {
       .getDoctorPublicSlots(selectedDoctorId, { days_ahead: 14 })
       .then((response) => setPatientSlots(response.items))
       .catch((err: any) =>
-        setError(err.message || 'Failed to load doctor availability'),
+        setError(formatApiError(err, 'Failed to load doctor availability')),
       );
   }, [role, selectedDoctorId]);
 
@@ -334,19 +330,6 @@ export default function AppointmentsScreen() {
     );
   }, [slotDates]);
 
-  const openDialog = (
-    title: string,
-    message: string,
-    actions?: { label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'danger' }[],
-  ) => {
-    setDialog({
-      visible: true,
-      title,
-      message,
-      actions,
-    });
-  };
-
   const activePickerValue = timePicker.field
     ? availabilityForm[timePicker.field] || ''
     : '';
@@ -360,7 +343,7 @@ export default function AppointmentsScreen() {
     const slotDuration = Number(availabilityForm.slot_duration_minutes);
 
     if (!Number.isFinite(slotDuration)) {
-      openDialog('Invalid duration', 'Please choose a valid slot duration.');
+      showDialog('Invalid duration', 'Please choose a valid slot duration.');
       return;
     }
 
@@ -386,7 +369,7 @@ export default function AppointmentsScreen() {
       resetAvailabilityForm();
       await loadDoctorData();
     } catch (err: any) {
-      openDialog('Unable to save availability', err.message || 'Please try again.');
+      showDialog('Unable to save availability', formatApiError(err, 'Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -397,12 +380,12 @@ export default function AppointmentsScreen() {
       setSubmitting(true);
       const response = await appointmentsService.generateDoctorSlots({ days_ahead: 14 });
       await loadDoctorData();
-      openDialog(
+      showDialog(
         'Slots generated',
         `${response.generated_count} new slots are ready. ${response.skipped_count} existing slots were kept.`,
       );
     } catch (err: any) {
-      openDialog('Unable to generate slots', err.message || 'Please try again.');
+      showDialog('Unable to generate slots', formatApiError(err, 'Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -421,7 +404,7 @@ export default function AppointmentsScreen() {
   };
 
   const deleteAvailability = (availabilityId: string) => {
-    openDialog('Delete availability', 'This removes future open slots from this window.', [
+    showDialog('Delete availability', 'This removes future open slots from this window.', [
       { label: 'Keep', onPress: () => {}, variant: 'secondary' },
       {
         label: 'Delete',
@@ -434,7 +417,7 @@ export default function AppointmentsScreen() {
               resetAvailabilityForm();
             }
           } catch (err: any) {
-            openDialog('Unable to delete', err.message || 'Please try again.');
+            showDialog('Unable to delete', formatApiError(err, 'Please try again.'));
           }
         },
       },
@@ -442,7 +425,7 @@ export default function AppointmentsScreen() {
   };
 
   const blockSlot = (slotId: string) => {
-    openDialog('Block slot', 'This slot will no longer be bookable.', [
+    showDialog('Block slot', 'This slot will no longer be bookable.', [
       { label: 'Keep open', onPress: () => {}, variant: 'secondary' },
       {
         label: 'Block',
@@ -452,7 +435,7 @@ export default function AppointmentsScreen() {
             await appointmentsService.blockDoctorSlot(slotId);
             await loadDoctorData();
           } catch (err: any) {
-            openDialog('Unable to block slot', err.message || 'Please try again.');
+            showDialog('Unable to block slot', formatApiError(err, 'Please try again.'));
           }
         },
       },
@@ -460,7 +443,7 @@ export default function AppointmentsScreen() {
   };
 
   const cancelDoctorAppointment = (appointmentId: string) => {
-    openDialog('Cancel appointment', 'This confirmed appointment will be cancelled.', [
+    showDialog('Cancel appointment', 'This confirmed appointment will be cancelled.', [
       { label: 'Keep', onPress: () => {}, variant: 'secondary' },
       {
         label: 'Cancel appointment',
@@ -470,7 +453,7 @@ export default function AppointmentsScreen() {
             await appointmentsService.cancelDoctorAppointment(appointmentId);
             await loadDoctorData();
           } catch (err: any) {
-            openDialog('Unable to cancel', err.message || 'Please try again.');
+            showDialog('Unable to cancel', formatApiError(err, 'Please try again.'));
           }
         },
       },
@@ -478,7 +461,7 @@ export default function AppointmentsScreen() {
   };
 
   const completeDoctorAppointment = (appointmentId: string) => {
-    openDialog('Complete appointment', 'Mark this appointment as completed?', [
+    showDialog('Complete appointment', 'Mark this appointment as completed?', [
       { label: 'Not yet', onPress: () => {}, variant: 'secondary' },
       {
         label: 'Complete',
@@ -487,7 +470,7 @@ export default function AppointmentsScreen() {
             await appointmentsService.completeDoctorAppointment(appointmentId);
             await loadDoctorData();
           } catch (err: any) {
-            openDialog('Unable to complete', err.message || 'Please try again.');
+            showDialog('Unable to complete', formatApiError(err, 'Please try again.'));
           }
         },
       },
@@ -496,7 +479,7 @@ export default function AppointmentsScreen() {
 
   const bookAppointment = async () => {
     if (!selectedSlotId) {
-      openDialog('Choose a slot', 'Select one available slot before booking.');
+      showDialog('Choose a slot', 'Select one available slot before booking.');
       return;
     }
 
@@ -511,19 +494,19 @@ export default function AppointmentsScreen() {
       setReasonForVisit('');
       setPatientNote('');
       await loadPatientData(selectedDoctorId);
-      openDialog(
+      showDialog(
         'Appointment confirmed',
         'Your slot has been booked instantly and now appears in your appointments list.',
       );
     } catch (err: any) {
-      openDialog('Unable to book slot', err.message || 'Please try again.');
+      showDialog('Unable to book slot', formatApiError(err, 'Please try again.'));
     } finally {
       setSubmitting(false);
     }
   };
 
   const cancelPatientAppointment = (appointmentId: string) => {
-    openDialog('Cancel booking', 'This upcoming booking will be cancelled.', [
+    showDialog('Cancel booking', 'This upcoming booking will be cancelled.', [
       { label: 'Keep booking', onPress: () => {}, variant: 'secondary' },
       {
         label: 'Cancel booking',
@@ -533,20 +516,18 @@ export default function AppointmentsScreen() {
             await appointmentsService.cancelPatientAppointment(appointmentId);
             await loadPatientData(selectedDoctorId);
           } catch (err: any) {
-            openDialog('Unable to cancel', err.message || 'Please try again.');
+            showDialog('Unable to cancel', formatApiError(err, 'Please try again.'));
           }
         },
       },
     ]);
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
         <Header title="Scheduling" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }
@@ -558,7 +539,7 @@ export default function AppointmentsScreen() {
         title={dialog.title}
         message={dialog.message}
         actions={dialog.actions}
-        onClose={() => setDialog((current) => ({ ...current, visible: false }))}
+        onClose={hideDialog}
       />
       <Modal
         visible={Platform.OS === 'web' && timePicker.visible}

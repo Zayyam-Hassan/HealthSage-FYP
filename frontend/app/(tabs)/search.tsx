@@ -3,14 +3,14 @@ import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Card from '@/components/Card';
-import Loader from '@/components/Loader';
-import { authService, type UserRole } from '@/services/auth';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { doctorsService } from '@/services/doctors';
 import { patientsService } from '@/services/patients';
 
 export default function SearchTabScreen() {
   const router = useRouter();
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({
     patients: 0,
@@ -19,11 +19,12 @@ export default function SearchTabScreen() {
   });
 
   useEffect(() => {
+    if (authLoading) return;
     (async () => {
       try {
-        const currentUser = await authService.getCurrentUser();
+        setLoading(true);
+        const currentUser = await refreshUser();
         const currentRole = currentUser?.role ?? null;
-        setRole(currentRole);
 
         if (currentRole === 'doctor') {
           const patients = await doctorsService.getMyPatients();
@@ -43,14 +44,12 @@ export default function SearchTabScreen() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [authLoading, refreshUser]);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }

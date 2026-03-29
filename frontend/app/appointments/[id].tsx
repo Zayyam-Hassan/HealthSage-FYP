@@ -6,9 +6,9 @@ import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Header from '@/components/Header';
-import Loader from '@/components/Loader';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { appointmentsService, type Appointment } from '@/services/appointments';
-import { authService, type UserRole } from '@/services/auth';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 
 function getBadgeVariant(status: string) {
   switch (status) {
@@ -25,7 +25,7 @@ function getBadgeVariant(status: string) {
 
 export default function AppointmentDetailsScreen() {
   const { id } = useLocalSearchParams();
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,14 +33,13 @@ export default function AppointmentDetailsScreen() {
   const loadAppointment = useCallback(async () => {
     try {
       setLoading(true);
-      const currentUser = await authService.getCurrentUser();
-      setRole(currentUser?.role ?? null);
+      await refreshUser();
       const data = await appointmentsService.getAppointment(id as string);
       setAppointment(data);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, refreshUser]);
 
   useEffect(() => {
     loadAppointment();
@@ -78,13 +77,11 @@ export default function AppointmentDetailsScreen() {
     }
   };
 
-  if (loading || !appointment) {
+  if (authLoading || loading || !appointment) {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <Header title="Appointment Details" showBack />
-        <View className="flex-1 items-center justify-center">
-          <Loader />
-        </View>
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }
