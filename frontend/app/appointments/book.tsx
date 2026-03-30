@@ -8,10 +8,11 @@ export default function BookAppointmentRedirectScreen() {
   const params = useLocalSearchParams<Record<string, string>>();
 
   useEffect(() => {
-    router.replace({
-      pathname: '/appointments',
-      params,
-    });
+    if (params.doctor_id) {
+      router.replace(`/appointments/doctor/${params.doctor_id}` as never);
+    } else {
+      router.replace({ pathname: '/appointments', params: {} });
+    }
   }, [params]);
 
   return (

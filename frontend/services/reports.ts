@@ -1,13 +1,6 @@
 import { apiClient } from './api';
 
-export type UploadedReportCategory =
-  | 'lab_report'
-  | 'prescription'
-  | 'imaging'
-  | 'discharge_summary'
-  | 'test_result'
-  | 'doctor_note'
-  | 'general_document';
+export type UploadedReportCategory = 'patient_sent' | 'doctor_sent' | 'system_generated';
 
 export interface UploadedReport {
   id: string;

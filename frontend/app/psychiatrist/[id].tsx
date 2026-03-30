@@ -162,7 +162,7 @@ export default function PsychiatristDetailsScreen() {
 
           <Button
             variant={canRequest ? 'outline' : 'primary'}
-            onPress={() => router.push(`/appointments/book?doctor_id=${doctor.id}` as any)}
+            onPress={() => router.push(`/appointments/doctor/${doctor.id}` as never)}
             fullWidth
             className={canRequest ? '' : 'mb-0'}
           >

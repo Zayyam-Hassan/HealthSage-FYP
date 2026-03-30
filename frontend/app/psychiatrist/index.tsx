@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Image,
   RefreshControl,
   ScrollView,
   Text,
@@ -16,6 +17,7 @@ import Header from '@/components/Header';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import SearchBar from '@/components/searchbar';
 import { colors } from '@/constants/colors';
+import { images } from '@/constants/images';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { doctorsService, type Doctor } from '@/services/doctors';
 
@@ -105,19 +107,24 @@ export default function PsychiatristListScreen() {
         }
       >
         <View className="px-6 pt-6">
-          <Card className="mb-5 bg-surface-soft border-coral-soft shadow-sm">
-            <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-coral-deep mb-2">
-              {role === 'patient' ? 'Directory' : 'Care team'}
+          <View className="mb-5 overflow-hidden rounded-3xl border border-coral-soft bg-coral px-4 py-4">
+            <Image
+              source={images.highlight}
+              className="absolute -right-8 -top-8 h-40 w-40 opacity-20"
+              resizeMode="contain"
+            />
+            <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-coral-ink/60 mb-2">
+              {role === 'patient' ? 'Specialist hunt' : 'Care team'}
             </Text>
-            <Text className="text-2xl font-bold text-text mb-1 tracking-tight leading-8">
-              {role === 'patient' ? 'Browse the directory' : 'Clinician directory'}
+            <Text className="text-3xl font-bold text-coral-ink mb-1 tracking-tight leading-9">
+              {role === 'patient' ? 'Doctors OnBoard' : 'Clinician directory'}
             </Text>
-            <Text className="text-sm text-text-secondary leading-6">
+            <Text className="text-sm text-coral-ink/80 leading-6">
               {role === 'patient'
-                ? 'Search, open a profile, then request—your care status on Home stays separate.'
+                ? "Let's connect with a specialist"
                 : 'Open a profile to view contact details.'}
             </Text>
-          </Card>
+          </View>
 
           <SearchBar
             placeholder="Search by name or specialization"
@@ -135,11 +142,11 @@ export default function PsychiatristListScreen() {
 
           <View className="mt-5 mb-3">
             <Text className="text-lg font-semibold text-text mb-1 tracking-tight">
-              {role === 'patient' ? 'Matching clinicians' : 'All clinicians'}
+              {role === 'patient' ? 'Specialists for you' : 'All clinicians'}
             </Text>
             <Text className="text-sm text-text-secondary leading-5">
               {role === 'patient'
-                ? 'Coral accent marks each row—tap through for details and booking.'
+                ? 'Tap any card for details and instant booking.'
                 : 'Tap a row to open the full profile.'}
             </Text>
           </View>
@@ -160,38 +167,73 @@ export default function PsychiatristListScreen() {
                   onPress={() => router.push(`/psychiatrist/${doctor.id}` as any)}
                   activeOpacity={0.85}
                 >
-                  <Card className="mb-3 border-coral-soft bg-white overflow-hidden pl-0">
-                    <View className="flex-row">
-                      <View className="w-1 bg-coral self-stretch" />
-                      <View className="flex-1 flex-row items-start justify-between py-3 pr-3 pl-3">
-                        <View className="flex-1 pr-3">
-                          <Text className="text-lg font-semibold text-text mb-1 tracking-tight">
-                            {doctor.name}
-                          </Text>
-                          <Text className="text-sm text-text-secondary mb-2">
-                            {doctor.specialization}
-                          </Text>
-                          <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep mt-1">
-                            {statusLabel}
+                  <Card className="mb-3 border-border/60 bg-white">
+                    <View className="flex-row items-start">
+                      <Image
+                        source={images.helpingImage1}
+                        className="h-20 w-20 rounded-2xl bg-bg-secondary"
+                        resizeMode="cover"
+                      />
+                      <View className="ml-3 flex-1 min-w-0">
+                        <View className="flex-row items-start justify-between">
+                          <View className="flex-1 pr-2">
+                            <Text className="text-[25px] leading-8 font-semibold text-text" numberOfLines={1}>
+                              {doctor.name}
+                            </Text>
+                            <Text className="text-sm text-coral-deep" numberOfLines={1}>
+                              {doctor.specialization}
+                            </Text>
+                          </View>
+                          <Ionicons
+                            name={
+                              doctor.relationship?.is_selected || doctor.relationship?.has_pending_request
+                                ? 'heart'
+                                : 'heart-outline'
+                            }
+                            size={20}
+                            color={
+                              doctor.relationship?.is_selected || doctor.relationship?.has_pending_request
+                                ? colors.status.error
+                                : colors.text.tertiary
+                            }
+                          />
+                        </View>
+                        <Text className="mt-1 text-xs text-text-secondary">
+                          {doctor.stats?.patient_count ?? 0} patient stories
+                        </Text>
+                        <Text className="mt-0.5 text-xs text-text-secondary">{statusLabel}</Text>
+                      </View>
+                    </View>
+
+                    <View className="mt-3 flex-row items-center justify-between">
+                      <View className="flex-1 pr-3">
+                        <Text className="text-sm font-semibold text-coral-deep">Next Available</Text>
+                        <Text className="text-xs text-text-secondary">Tomorrow</Text>
+                      </View>
+                      {role === 'patient' &&
+                      !doctor.relationship?.is_selected &&
+                      !doctor.relationship?.has_pending_request &&
+                      doctor.accepting_patients !== false ? (
+                        <TouchableOpacity
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            requestDoctor(doctor.id);
+                          }}
+                          className="rounded-xl bg-primary px-6 py-2.5"
+                        >
+                          <Text className="text-sm font-semibold text-white">Book Now</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View className="rounded-xl bg-bg-secondary px-4 py-2.5">
+                          <Text className="text-sm font-semibold text-text-secondary">
+                            {doctor.relationship?.has_pending_request
+                              ? 'Pending'
+                              : doctor.relationship?.is_selected
+                                ? 'Assigned'
+                                : 'View Profile'}
                           </Text>
                         </View>
-                        {role === 'patient' &&
-                          !doctor.relationship?.is_selected &&
-                          !doctor.relationship?.has_pending_request &&
-                          doctor.accepting_patients !== false && (
-                            <TouchableOpacity
-                              onPress={(event) => {
-                                event.stopPropagation();
-                                requestDoctor(doctor.id);
-                              }}
-                              className="px-4 py-2.5 rounded-2xl bg-coral-ink"
-                            >
-                              <Text className="text-sm font-semibold text-white">
-                                Request
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                      </View>
+                      )}
                     </View>
                   </Card>
                 </TouchableOpacity>

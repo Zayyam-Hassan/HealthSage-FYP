@@ -33,12 +33,12 @@ const AvailabilitySchema = z.object({
 });
 
 const GenerateSlotsSchema = z.object({
-  days_ahead: z.number().int().positive().max(30).optional(),
+  days_ahead: z.number().int().positive().max(31).optional(),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 const SlotQuerySchema = z.object({
-  days_ahead: z.coerce.number().int().positive().max(30).optional(),
+  days_ahead: z.coerce.number().int().positive().max(31).optional(),
   status: z.enum(appointmentSlotStatuses).optional(),
 });
 

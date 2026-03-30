@@ -188,6 +188,7 @@ export default function SignupScreen() {
               <View className="mb-4">
                 <Input
                   type="text"
+                  usernameField
                   label="UserName"
                   placeholder="UserName"
                   value={username}
@@ -208,6 +209,7 @@ export default function SignupScreen() {
 
                 <Input
                   type="password"
+                  passwordMode="new"
                   label="Password"
                   placeholder="Password"
                   value={password}
@@ -218,6 +220,7 @@ export default function SignupScreen() {
 
                 <Input
                   type="password"
+                  passwordMode="new"
                   label="Confirm Password"
                   placeholder="Confirm Password"
                   value={confirmPassword}

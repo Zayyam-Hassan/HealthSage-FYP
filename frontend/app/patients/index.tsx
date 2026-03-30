@@ -174,7 +174,9 @@ export default function PatientsListScreen() {
                     {request.patient?.full_name ?? 'Patient request'}
                   </Text>
                   <Text className="text-sm text-text-secondary mb-4">
-                    {request.patient?.patient_id ?? 'Profile request'}
+                    {request.patient
+                      ? `${request.patient.demographics.age} yrs · ${request.patient.gender}`
+                      : 'Profile request'}
                   </Text>
                   <View className="flex-row">
                     <Button
@@ -206,15 +208,6 @@ export default function PatientsListScreen() {
                 {role === 'doctor' ? 'Tap a row to open the full chart.' : 'Tap to review demographics and vitals.'}
               </Text>
             </View>
-            {role === 'doctor' && (
-              <Button
-                variant="primary"
-                size="sm"
-                onPress={() => router.push('/patients/new' as any)}
-              >
-                Add
-              </Button>
-            )}
           </View>
 
           {filteredPatients.length > 0 ? (
@@ -237,7 +230,7 @@ export default function PatientsListScreen() {
               title={role === 'doctor' ? 'No assigned patients yet' : 'Patient profile unavailable'}
               message={
                 role === 'doctor'
-                  ? 'Accept a request or add a patient to start building your panel.'
+                  ? 'Accept a request to start building your panel.'
                   : 'Complete your health profile so your doctor and predictions can use real data.'
               }
             />

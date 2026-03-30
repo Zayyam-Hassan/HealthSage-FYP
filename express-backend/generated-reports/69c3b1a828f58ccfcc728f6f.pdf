@@ -1,0 +1,754 @@
+%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R 5 0 R 7 0 R 9 0 R] /Count 4 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 4 0 R >> endobj
+4 0 obj << /Length 2811 >> stream
+BT
+/F1 20 Tf
+50 760 Td
+(Care Guidance Summary for PT-4AE48A) Tj
+ET
+BT
+/F1 13 Tf
+50 728 Td
+(Overview) Tj
+ET
+BT
+/F1 11 Tf
+58 708 Td
+(PT-4AE48A is a 24-year-old male with medium model-predicted diabetes risk \(49%\).) Tj
+ET
+BT
+/F1 11 Tf
+58 692 Td
+(Current profile: HbA1c 5.2%, fasting glucose 90 mg/dL, BMI 19. Key protective) Tj
+ET
+BT
+/F1 11 Tf
+58 676 Td
+(factors include HbA1c 5.2% is currently in a reassuring range. and Fasting glucose) Tj
+ET
+BT
+/F1 11 Tf
+58 660 Td
+(90 mg/dL does not currently suggest fasting dysglycemia. Main issues to address) Tj
+ET
+BT
+/F1 11 Tf
+58 644 Td
+(now: Random glucose 130 mg/dL is mildly elevated and worth monitoring over time.) Tj
+ET
+BT
+/F1 11 Tf
+58 628 Td
+(Blood pressure 120/88 mmHg is above the preferred range and should be rechecked.) Tj
+ET
+BT
+/F1 13 Tf
+50 604 Td
+(Risk Summary) Tj
+ET
+BT
+/F1 11 Tf
+58 584 Td
+(medium diabetes risk \(49%\) based on the latest available model-supported) Tj
+ET
+BT
+/F1 11 Tf
+58 568 Td
+(assessment.) Tj
+ET
+BT
+/F1 13 Tf
+50 544 Td
+(Risk Narrative) Tj
+ET
+BT
+/F1 11 Tf
+58 524 Td
+(Risk is in the moderate range. Top features show which inputs the model relied on.) Tj
+ET
+BT
+/F1 13 Tf
+50 500 Td
+(Clinical Snapshot) Tj
+ET
+BT
+/F1 11 Tf
+58 480 Td
+(- Age: 24) Tj
+ET
+BT
+/F1 11 Tf
+58 464 Td
+(- Sex: Male) Tj
+ET
+BT
+/F1 11 Tf
+58 448 Td
+(- Height: 175 cm) Tj
+ET
+BT
+/F1 11 Tf
+58 432 Td
+(- Weight: 68 kg) Tj
+ET
+BT
+/F1 11 Tf
+58 416 Td
+(- HbA1c: 5.2%) Tj
+ET
+BT
+/F1 11 Tf
+58 400 Td
+(- Fasting glucose: 90 mg/dL) Tj
+ET
+BT
+/F1 11 Tf
+58 384 Td
+(- Random glucose: 130 mg/dL) Tj
+ET
+BT
+/F1 11 Tf
+58 368 Td
+(- Total cholesterol: 150 mg/dL) Tj
+ET
+BT
+/F1 11 Tf
+58 352 Td
+(- HDL: 40 mg/dL) Tj
+ET
+BT
+/F1 11 Tf
+58 336 Td
+(- LDL: 90 mg/dL) Tj
+ET
+BT
+/F1 11 Tf
+58 320 Td
+(- BMI: 19) Tj
+ET
+BT
+/F1 11 Tf
+58 304 Td
+(- Blood pressure: 120/88 mmHg) Tj
+ET
+BT
+/F1 11 Tf
+58 288 Td
+(- Smoking: Never) Tj
+ET
+BT
+/F1 11 Tf
+58 272 Td
+(- Drinking: Never) Tj
+ET
+BT
+/F1 11 Tf
+58 256 Td
+(- Exercise: Heavy) Tj
+ET
+BT
+/F1 13 Tf
+50 232 Td
+(Protective Factors) Tj
+ET
+BT
+/F1 11 Tf
+58 212 Td
+(- HbA1c 5.2% is currently in a reassuring range.) Tj
+ET
+BT
+/F1 11 Tf
+58 196 Td
+(- Fasting glucose 90 mg/dL does not currently suggest fasting dysglycemia.) Tj
+ET
+BT
+/F1 11 Tf
+58 180 Td
+(- BMI 19 is within a healthy range for metabolic risk reduction.) Tj
+ET
+BT
+/F1 11 Tf
+58 164 Td
+(- Current heavy exercise pattern is a strong protective lifestyle factor.) Tj
+ET
+BT
+/F1 11 Tf
+58 148 Td
+(- No active smoking exposure is documented.) Tj
+ET
+BT
+/F1 11 Tf
+58 132 Td
+(- Alcohol intake is not adding a current metabolic burden in the profile.) Tj
+ET
+BT
+/F1 13 Tf
+50 108 Td
+(Active Concerns) Tj
+ET
+BT
+/F1 11 Tf
+58 88 Td
+(- Random glucose 130 mg/dL is mildly elevated and worth monitoring over time.) Tj
+ET
+BT
+/F1 11 Tf
+58 72 Td
+(- Blood pressure 120/88 mmHg is above the preferred range and should be rechecked.) Tj
+ET
+endstream endobj
+5 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 6 0 R >> endobj
+6 0 obj << /Length 3763 >> stream
+BT
+/F1 20 Tf
+50 760 Td
+(Care Guidance Summary for PT-4AE48A) Tj
+ET
+BT
+/F1 13 Tf
+50 728 Td
+(Key Risk Drivers) Tj
+ET
+BT
+/F1 11 Tf
+58 708 Td
+(- BMI \(impact +0.63\)) Tj
+ET
+BT
+/F1 11 Tf
+58 692 Td
+(- AGE \(impact +0.56\)) Tj
+ET
+BT
+/F1 11 Tf
+58 676 Td
+(- LDL \(impact +0.42\)) Tj
+ET
+BT
+/F1 11 Tf
+58 660 Td
+(- SEX \(impact +0.42\)) Tj
+ET
+BT
+/F1 11 Tf
+58 644 Td
+(- TOTAL CHOLESTEROL \(impact +0.40\)) Tj
+ET
+BT
+/F1 11 Tf
+58 628 Td
+(- RANDOM GLUCOSE \(impact +0.39\)) Tj
+ET
+BT
+/F1 13 Tf
+50 604 Td
+(Lifestyle Recommendations) Tj
+ET
+BT
+/F1 11 Tf
+58 584 Td
+(- Maintain the current glucose-friendly eating pattern to preserve HbA1c 5.2% and) Tj
+ET
+BT
+/F1 11 Tf
+58 568 Td
+(fasting glucose 90 mg/dL. Focus on eating a balanced diet with plenty of) Tj
+ET
+BT
+/F1 11 Tf
+58 552 Td
+(vegetables, whole grains, lean proteins, and healthy fats to help maintain stable) Tj
+ET
+BT
+/F1 11 Tf
+58 536 Td
+(blood sugar levels.) Tj
+ET
+BT
+/F1 11 Tf
+58 520 Td
+(- Preserve the current heavy exercise routine while building in recovery,) Tj
+ET
+BT
+/F1 11 Tf
+58 504 Td
+(hydration, and blood-pressure awareness. Start with small, manageable goals, such) Tj
+ET
+BT
+/F1 11 Tf
+58 488 Td
+(as a 10-minute walk after meals, and gradually increase the duration and intensity) Tj
+ET
+BT
+/F1 11 Tf
+58 472 Td
+(of your exercise.) Tj
+ET
+BT
+/F1 11 Tf
+58 456 Td
+(- Because blood pressure is 120/88 mmHg, emphasize sodium awareness, regular) Tj
+ET
+BT
+/F1 11 Tf
+58 440 Td
+(aerobic activity, and repeat BP checks. Monitor your blood pressure regularly, as) Tj
+ET
+BT
+/F1 11 Tf
+58 424 Td
+(your diastolic blood pressure is slightly elevated. Lifestyle changes like) Tj
+ET
+BT
+/F1 11 Tf
+58 408 Td
+(reducing sodium intake, exercising, and managing stress can help.) Tj
+ET
+BT
+/F1 11 Tf
+58 392 Td
+(- Aim for 7-9 hours of quality sleep per night, as poor sleep can affect blood) Tj
+ET
+BT
+/F1 11 Tf
+58 376 Td
+(sugar control and overall health.) Tj
+ET
+BT
+/F1 11 Tf
+58 360 Td
+(- Practice stress-reduction techniques like deep breathing, meditation, or yoga to) Tj
+ET
+BT
+/F1 11 Tf
+58 344 Td
+(help manage stress levels, which can impact blood sugar control.) Tj
+ET
+BT
+/F1 11 Tf
+58 328 Td
+(- Track meal patterns around higher glucose readings and reinforce carbohydrate) Tj
+ET
+BT
+/F1 11 Tf
+58 312 Td
+(quality. Monitor carbohydrate intake by choosing complex carbs \(like whole grains,) Tj
+ET
+BT
+/F1 11 Tf
+58 296 Td
+(legumes, and vegetables\) over simple carbs \(like sugary snacks and refined) Tj
+ET
+BT
+/F1 11 Tf
+58 280 Td
+(grains\).) Tj
+ET
+BT
+/F1 13 Tf
+50 256 Td
+(Medication Considerations) Tj
+ET
+BT
+/F1 11 Tf
+58 236 Td
+(- Primary option for clinician review: Vitamin D \(Cholecalciferol\). Safe for) Tj
+ET
+BT
+/F1 11 Tf
+58 220 Td
+(general metabolic and bone health support; no known contraindications or) Tj
+ET
+BT
+/F1 11 Tf
+58 204 Td
+(interactions in this context. Low risk of adverse effects and may provide) Tj
+ET
+BT
+/F1 11 Tf
+58 188 Td
+(secondary benefits for metabolic health.) Tj
+ET
+BT
+/F1 11 Tf
+58 172 Td
+(- Alternatives noted for review: Omega-3 Fatty Acids.) Tj
+ET
+BT
+/F1 11 Tf
+58 156 Td
+(- A 24-year-old male with a normal BMI and currently non-diabetic glycemic metrics) Tj
+ET
+BT
+/F1 11 Tf
+58 140 Td
+(\(HbA1c 5.2%, fasting glucose 90 mg/dL\). Diabetes type is undetermined, and the) Tj
+ET
+BT
+/F1 11 Tf
+58 124 Td
+(patient has no known comorbidities or medications, with a low diabetes risk score.) Tj
+ET
+BT
+/F1 11 Tf
+58 108 Td
+(- Safety and validation notes: Renal function assessment is recommended before) Tj
+ET
+BT
+/F1 11 Tf
+58 92 Td
+(considering metformin or other pharmacologic agents in the future. No) Tj
+ET
+BT
+/F1 11 Tf
+58 76 Td
+(pharmacologic intervention is urgently indicated given the patient's normal) Tj
+ET
+BT
+/F1 11 Tf
+58 60 Td
+(glycemic metrics and low diabetes risk score. Lifestyle interventions \(e.g.,) Tj
+ET
+endstream endobj
+7 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 8 0 R >> endobj
+8 0 obj << /Length 3856 >> stream
+BT
+/F1 20 Tf
+50 760 Td
+(Care Guidance Summary for PT-4AE48A) Tj
+ET
+BT
+/F1 11 Tf
+58 728 Td
+(nutrition, physical activity\) should be prioritized over pharmacologic options at) Tj
+ET
+BT
+/F1 11 Tf
+58 712 Td
+(this time.) Tj
+ET
+BT
+/F1 13 Tf
+50 688 Td
+(Monitoring Plan) Tj
+ET
+BT
+/F1 11 Tf
+58 668 Td
+(- Repeat HbA1c at the usual clinician-directed interval to confirm stability from) Tj
+ET
+BT
+/F1 11 Tf
+58 652 Td
+(the current 5.2% baseline.) Tj
+ET
+BT
+/F1 11 Tf
+58 636 Td
+(- Monitor fasting or home glucose trends against the current 90 mg/dL baseline.) Tj
+ET
+BT
+/F1 11 Tf
+58 620 Td
+(- Repeat blood pressure readings and compare against the current 120/88 mmHg) Tj
+ET
+BT
+/F1 11 Tf
+58 604 Td
+(baseline.) Tj
+ET
+BT
+/F1 11 Tf
+58 588 Td
+(- Document renal function before considering future pharmacologic escalation.) Tj
+ET
+BT
+/F1 11 Tf
+58 572 Td
+(- Review the lipid profile at follow-up so cardiovascular prevention advice stays) Tj
+ET
+BT
+/F1 11 Tf
+58 556 Td
+(targeted.) Tj
+ET
+BT
+/F1 13 Tf
+50 532 Td
+(Doctor Considerations) Tj
+ET
+BT
+/F1 11 Tf
+58 512 Td
+(- Creatinine is not documented in the current profile, which limits medication) Tj
+ET
+BT
+/F1 11 Tf
+58 496 Td
+(escalation planning.) Tj
+ET
+BT
+/F1 11 Tf
+58 480 Td
+(- Triglycerides are not documented in the current profile.) Tj
+ET
+BT
+/F1 11 Tf
+58 464 Td
+(- Medication safety notes requiring clinician attention: Renal function assessment) Tj
+ET
+BT
+/F1 11 Tf
+58 448 Td
+(is recommended before considering metformin or other pharmacologic agents in the) Tj
+ET
+BT
+/F1 11 Tf
+58 432 Td
+(future. No pharmacologic intervention is urgently indicated given the patient's) Tj
+ET
+BT
+/F1 11 Tf
+58 416 Td
+(normal glycemic metrics and low diabetes risk score. Lifestyle interventions) Tj
+ET
+BT
+/F1 11 Tf
+58 400 Td
+(\(e.g., nutrition, physical activity\) should be prioritized over pharmacologic) Tj
+ET
+BT
+/F1 11 Tf
+58 384 Td
+(options at this time.) Tj
+ET
+BT
+/F1 11 Tf
+58 368 Td
+(- No chronic conditions are documented in the current patient profile, so) Tj
+ET
+BT
+/F1 11 Tf
+58 352 Td
+(recommendations are driven mainly by vitals, labs, and lifestyle history.) Tj
+ET
+BT
+/F1 13 Tf
+50 328 Td
+(Evidence Summary) Tj
+ET
+BT
+/F1 11 Tf
+58 308 Td
+(- Standards of Care in Diabetes) Tj
+ET
+BT
+/F1 11 Tf
+58 292 Td
+(- ADA Clinical Guidelines - The Standards of Care in Diabetes \(Standards of Care\)) Tj
+ET
+BT
+/F1 11 Tf
+58 276 Td
+(includes all current clinical practice recommendations of the American Diabetes) Tj
+ET
+BT
+/F1 11 Tf
+58 260 Td
+(Association \(ADA\) and ... - https://professional.diabetes.org/standards-of-care) Tj
+ET
+BT
+/F1 11 Tf
+58 244 Td
+(- The American Diabetes Association Releases the Standards of Care ... - Today,) Tj
+ET
+BT
+/F1 11 Tf
+58 228 Td
+(the Standards of Care in Diabetes—2024 is available online and is published as a) Tj
+ET
+BT
+/F1 11 Tf
+58 212 Td
+(supplement to the January 2024 issue of Diabetes Care® . -) Tj
+ET
+BT
+/F1 11 Tf
+58 196 Td
+(https://diabetes.org/newsroom/press-releases/american-diabetes-association-releases-standards-care-diabetes-2024) Tj
+ET
+BT
+/F1 11 Tf
+58 180 Td
+(- Volume 47 Issue Supplement_1) Tj
+ET
+BT
+/F1 11 Tf
+58 164 Td
+(- Diabetes Care - Standards of Care in Diabetes—2024 · 1. Improving Care and) Tj
+ET
+BT
+/F1 11 Tf
+58 148 Td
+(Promoting Health in Populations: Standards of Care in Diabetes—2024 · 2. Diagnosis) Tj
+ET
+BT
+/F1 11 Tf
+58 132 Td
+(and Classification ... - https://diabetesjournals.org/care/issue/47/Supplement_1) Tj
+ET
+BT
+/F1 11 Tf
+58 116 Td
+(- Trends in First-Line Glucose-Lowering Drug Use in Adults With Type ... - Among) Tj
+ET
+BT
+/F1 11 Tf
+58 100 Td
+(adult patients with type 2 diabetes, metformin was by far the most frequent) Tj
+ET
+BT
+/F1 11 Tf
+58 84 Td
+(first-line treatment. While the use of SGLT-2i and GLP-1RA was ... -) Tj
+ET
+BT
+/F1 11 Tf
+58 68 Td
+(https://diabetesjournals.org/care/article/44/8/1774/138868/Trends-in-First-Line-Glucose-Lowering-Drug-Use-in) Tj
+ET
+endstream endobj
+9 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 10 0 R >> endobj
+10 0 obj << /Length 2203 >> stream
+BT
+/F1 20 Tf
+50 760 Td
+(Care Guidance Summary for PT-4AE48A) Tj
+ET
+BT
+/F1 11 Tf
+58 728 Td
+(- 9. Pharmacologic Approaches to Glycemic Treatment: Standards of ... - ...) Tj
+ET
+BT
+/F1 11 Tf
+58 712 Td
+(medication that historically has been the first-line treatment for type 2 diabetes) Tj
+ET
+BT
+/F1 11 Tf
+58 696 Td
+(\(93,94\). Metformin is effective and safe, is inexpensive ... -) Tj
+ET
+BT
+/F1 11 Tf
+58 680 Td
+(https://diabetesjournals.org/care/article/49/Supplement_1/S183/163934/9-Pharmacologic-Approaches-to-Glycemic-Treatment) Tj
+ET
+BT
+/F1 11 Tf
+58 664 Td
+(- 9. Pharmacologic Approaches to Glycemic Treatment: Standards of ... - Compared) Tj
+ET
+BT
+/F1 11 Tf
+58 648 Td
+(with sulfonylureas, metformin as first-line therapy has beneficial effects on A1C,) Tj
+ET
+BT
+/F1 11 Tf
+58 632 Td
+(is weight neutral, does not cause hypoglycemia, and ... -) Tj
+ET
+BT
+/F1 11 Tf
+58 616 Td
+(https://diabetesjournals.org/care/article/47/Supplement_1/S158/153955/9-Pharmacologic-Approaches-to-Glycemic-Treatment) Tj
+ET
+BT
+/F1 13 Tf
+50 592 Td
+(Next Steps) Tj
+ET
+BT
+/F1 11 Tf
+58 572 Td
+(- Random glucose 130 mg/dL is mildly elevated and worth monitoring over time.) Tj
+ET
+BT
+/F1 11 Tf
+58 556 Td
+(- Maintain the current glucose-friendly eating pattern to preserve HbA1c 5.2% and) Tj
+ET
+BT
+/F1 11 Tf
+58 540 Td
+(fasting glucose 90 mg/dL. Focus on eating a balanced diet with plenty of) Tj
+ET
+BT
+/F1 11 Tf
+58 524 Td
+(vegetables, whole grains, lean proteins, and healthy fats to help maintain stable) Tj
+ET
+BT
+/F1 11 Tf
+58 508 Td
+(blood sugar levels.) Tj
+ET
+BT
+/F1 11 Tf
+58 492 Td
+(- Primary option for clinician review: Vitamin D \(Cholecalciferol\). Safe for) Tj
+ET
+BT
+/F1 11 Tf
+58 476 Td
+(general metabolic and bone health support; no known contraindications or) Tj
+ET
+BT
+/F1 11 Tf
+58 460 Td
+(interactions in this context. Low risk of adverse effects and may provide) Tj
+ET
+BT
+/F1 11 Tf
+58 444 Td
+(secondary benefits for metabolic health.) Tj
+ET
+BT
+/F1 11 Tf
+58 428 Td
+(- Repeat HbA1c at the usual clinician-directed interval to confirm stability from) Tj
+ET
+BT
+/F1 11 Tf
+58 412 Td
+(the current 5.2% baseline.) Tj
+ET
+BT
+/F1 11 Tf
+58 396 Td
+(- Monitor fasting or home glucose trends against the current 90 mg/dL baseline.) Tj
+ET
+endstream endobj
+11 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+xref
+0 12
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000133 00000 n 
+0000000260 00000 n 
+0000003123 00000 n 
+0000003250 00000 n 
+0000007065 00000 n 
+0000007192 00000 n 
+0000011100 00000 n 
+0000011228 00000 n 
+0000013484 00000 n 
+trailer << /Size 12 /Root 1 0 R >>
+startxref
+13555
+%%EOF

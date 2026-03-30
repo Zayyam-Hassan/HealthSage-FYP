@@ -4,19 +4,19 @@
  */
 
 export const colors = {
-  // Primary Colors — deep teal (professional, readable on white)
+  // Primary — coral (`bg-primary`, `text-primary`, etc.); same family as `coral`
   primary: {
-    main: '#1a5f6b',
-    light: '#2a7d8c',
-    dark: '#134854',
+    main: '#faad9e',
+    light: '#fcd2ca',
+    dark: '#e89588',
     contrast: '#FFFFFF',
   },
 
-  // Secondary Colors
+  // Secondary — coral tones (distinct steps for hierarchy)
   secondary: {
-    main: '#2d8a6e',
-    light: '#3da382',
-    dark: '#236f57',
+    main: '#e89588',
+    light: '#faad9e',
+    dark: '#d47a6e',
     contrast: '#FFFFFF',
   },
 
@@ -27,7 +27,7 @@ export const colors = {
     dark: '#3d5d8a',
   },
 
-  /** Figma-inspired warm coral — CTAs, headers, highlights (healthcare-premium) */
+  /** Warm coral — CTAs, headers, highlights (Tailwind `coral-*`). */
   coral: {
     main: '#faad9e',
     light: '#fcd2ca',

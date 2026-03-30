@@ -1,0 +1,249 @@
+%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >> endobj
+4 0 obj << /Length 2484 >> stream
+BT
+/F1 20 Tf
+50 760 Td
+(PT-4AE48A Risk Summary) Tj
+ET
+BT
+/F1 13 Tf
+50 728 Td
+(Summary) Tj
+ET
+BT
+/F1 11 Tf
+58 708 Td
+(Latest risk assessment: medium risk with score 0.4843604564666748.) Tj
+ET
+BT
+/F1 13 Tf
+50 684 Td
+(Patient Snapshot) Tj
+ET
+BT
+/F1 11 Tf
+58 664 Td
+(patient id: PT-4AE48A) Tj
+ET
+BT
+/F1 11 Tf
+58 648 Td
+(full name: PT-4AE48A) Tj
+ET
+BT
+/F1 11 Tf
+58 632 Td
+(age: 24) Tj
+ET
+BT
+/F1 11 Tf
+58 616 Td
+(sex: Male) Tj
+ET
+BT
+/F1 11 Tf
+58 600 Td
+(lab tests: hba1c: 5.2; fasting glucose: 90; glucose: 130; cholesterol: 150; hdl:) Tj
+ET
+BT
+/F1 11 Tf
+58 584 Td
+(40; ldl: 90; triglycerides: 190; urea: 100; creatinine: 4) Tj
+ET
+BT
+/F1 11 Tf
+58 568 Td
+(vital signs: bmi: 19; systolic bp: 120; diastolic bp: 88) Tj
+ET
+BT
+/F1 11 Tf
+58 552 Td
+(lifestyle: smoking: Never; drinking: Never; exercise: Heavy) Tj
+ET
+BT
+/F1 13 Tf
+50 528 Td
+(Risk Score) Tj
+ET
+BT
+/F1 11 Tf
+58 508 Td
+(0.4843604564666748) Tj
+ET
+BT
+/F1 13 Tf
+50 484 Td
+(Risk Label) Tj
+ET
+BT
+/F1 11 Tf
+58 464 Td
+(medium) Tj
+ET
+BT
+/F1 13 Tf
+50 440 Td
+(Explanation) Tj
+ET
+BT
+/F1 11 Tf
+58 420 Td
+(risk explanation: Risk is in the moderate range. Top features show which inputs) Tj
+ET
+BT
+/F1 11 Tf
+58 404 Td
+(the model relied on.) Tj
+ET
+BT
+/F1 11 Tf
+58 388 Td
+(top features: name: AGE; importance: 0.6217; name: BMI; importance: 0.5742; name:) Tj
+ET
+BT
+/F1 11 Tf
+58 372 Td
+(DIASTOLIC_BP; importance: 0.4347; name: RANDOM_GLUCOSE; importance: 0.4128; name:) Tj
+ET
+BT
+/F1 11 Tf
+58 356 Td
+(TRIGLYCERIDES; importance: 0.4108; name: LDL; importance: 0.3941; name: SEX;) Tj
+ET
+BT
+/F1 11 Tf
+58 340 Td
+(importance: 0.3891; name: HEIGHT_CM; importance: 0.3764) Tj
+ET
+BT
+/F1 11 Tf
+58 324 Td
+(graph context summary: Explanation from PyTorch Geometric GNNExplainer: learned) Tj
+ET
+BT
+/F1 11 Tf
+58 308 Td
+(importance of each input feature for this prediction given the trained GraphSAGE) Tj
+ET
+BT
+/F1 11 Tf
+58 292 Td
+(model.) Tj
+ET
+BT
+/F1 11 Tf
+58 276 Td
+(method: gnn_explainer) Tj
+ET
+BT
+/F1 13 Tf
+50 252 Td
+(Top Features) Tj
+ET
+BT
+/F1 11 Tf
+58 232 Td
+(name: AGE) Tj
+ET
+BT
+/F1 11 Tf
+58 216 Td
+(importance: 0.6217) Tj
+ET
+BT
+/F1 11 Tf
+58 200 Td
+(name: BMI) Tj
+ET
+BT
+/F1 11 Tf
+58 184 Td
+(importance: 0.5742) Tj
+ET
+BT
+/F1 11 Tf
+58 168 Td
+(name: DIASTOLIC_BP) Tj
+ET
+BT
+/F1 11 Tf
+58 152 Td
+(importance: 0.4347) Tj
+ET
+BT
+/F1 11 Tf
+58 136 Td
+(name: RANDOM_GLUCOSE) Tj
+ET
+BT
+/F1 11 Tf
+58 120 Td
+(importance: 0.4128) Tj
+ET
+BT
+/F1 11 Tf
+58 104 Td
+(name: TRIGLYCERIDES) Tj
+ET
+BT
+/F1 11 Tf
+58 88 Td
+(importance: 0.4108) Tj
+ET
+BT
+/F1 11 Tf
+58 72 Td
+(name: LDL) Tj
+ET
+endstream endobj
+5 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >> endobj
+6 0 obj << /Length 291 >> stream
+BT
+/F1 20 Tf
+50 760 Td
+(PT-4AE48A Risk Summary) Tj
+ET
+BT
+/F1 11 Tf
+58 728 Td
+(importance: 0.3941) Tj
+ET
+BT
+/F1 11 Tf
+58 712 Td
+(name: SEX) Tj
+ET
+BT
+/F1 11 Tf
+58 696 Td
+(importance: 0.3891) Tj
+ET
+BT
+/F1 11 Tf
+58 680 Td
+(name: HEIGHT_CM) Tj
+ET
+BT
+/F1 11 Tf
+58 664 Td
+(importance: 0.3764) Tj
+ET
+endstream endobj
+7 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000002783 00000 n 
+0000002909 00000 n 
+0000003251 00000 n 
+trailer << /Size 8 /Root 1 0 R >>
+startxref
+3321
+%%EOF

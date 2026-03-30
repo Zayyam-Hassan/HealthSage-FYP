@@ -4,7 +4,6 @@ import { Tabs } from "expo-router";
 import React from "react";
 import { Image, View } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '@/src/features/auth/hooks/useAuth';
 
 interface TabIconProps {
   focused: boolean;
@@ -48,7 +47,6 @@ const TabIcon = ({ focused, icon }: TabIconProps) => {
 
 const TabsLayout = () => {
   const insets = useSafeAreaInsets();
-  const { role } = useAuth();
 
   return (
     <Tabs
@@ -90,17 +88,9 @@ const TabsLayout = () => {
         }}
       />
       <Tabs.Screen
-        name="search"
-        options={{
-          title: role === 'doctor' ? "Hub" : "Care",
-          headerShown: false,
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={icons.search} />,
-        }}
-      />
-      <Tabs.Screen
         name="saved"
         options={{
-          title: role === 'doctor' ? "Records" : "Records",
+          title: "Records",
           headerShown: false,
           tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={icons.save} />,
         }}

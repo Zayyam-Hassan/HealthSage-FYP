@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
+  PanResponder,
   Platform,
   RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -21,7 +21,6 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import Header from '@/components/Header';
-import Select from '@/components/Select';
 import {
   appointmentsService,
   type Appointment,
@@ -36,6 +35,7 @@ import { colors } from '@/constants/colors';
 import { formatApiError } from '@/src/shared/utils/formatApiError';
 import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
+import AppointmentMonthCalendar from './AppointmentMonthCalendar';
 
 const weekdays: { label: string; value: SchedulingWeekday }[] = [
   { label: 'Sun', value: 'sunday' },
@@ -94,51 +94,61 @@ function getBadgeVariant(status: string) {
   }
 }
 
-function emptyAvailabilityForm() {
+const WEEKDAY_ORDER: SchedulingWeekday[] = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+];
+
+function formatScheduleDayKey(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function dateKeyToLocalDate(key: string): Date {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function dateToSchedulingWeekday(d: Date): SchedulingWeekday {
+  return WEEKDAY_ORDER[d.getDay()];
+}
+
+function nextOccurrenceDateForWeekday(weekday: SchedulingWeekday): Date {
+  const idx = WEEKDAY_ORDER.indexOf(weekday);
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  const current = d.getDay();
+  const add = (idx - current + 7) % 7;
+  d.setDate(d.getDate() + add);
+  return d;
+}
+
+const WEEKDAY_LONG: Record<SchedulingWeekday, string> = {
+  sunday: 'Sunday',
+  monday: 'Monday',
+  tuesday: 'Tuesday',
+  wednesday: 'Wednesday',
+  thursday: 'Thursday',
+  friday: 'Friday',
+  saturday: 'Saturday',
+};
+
+function emptyAvailabilityForm(weekday: SchedulingWeekday = 'monday') {
   return {
-    weekday: 'monday' as SchedulingWeekday,
+    weekday,
     start_time: '09:00',
     end_time: '13:00',
     slot_duration_minutes: '30',
     break_start_time: '',
     break_end_time: '',
   };
-}
-
-function TimeField({
-  label,
-  value,
-  helperText,
-  onPress,
-  onClear,
-}: {
-  label: string;
-  value: string;
-  helperText: string;
-  onPress: () => void;
-  onClear?: () => void;
-}) {
-  return (
-    <View className="mb-4">
-      <View className="mb-2 flex-row items-center justify-between">
-        <Text className="text-sm font-medium text-text">{label}</Text>
-        {onClear ? (
-          <Button variant="text" size="sm" onPress={onClear}>
-            Clear
-          </Button>
-        ) : null}
-      </View>
-      <TouchableOpacity
-        onPress={onPress}
-        className="rounded-2xl border border-border/90 bg-bg-card px-4 py-4 min-h-[52px] justify-center"
-      >
-        <Text className="text-base font-semibold text-text">
-          {value || 'Select time'}
-        </Text>
-        <Text className="mt-1 text-sm text-text-secondary">{helperText}</Text>
-      </TouchableOpacity>
-    </View>
-  );
 }
 
 export default function AppointmentsScreen() {
@@ -149,45 +159,29 @@ export default function AppointmentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [availabilityForm, setAvailabilityForm] = useState(emptyAvailabilityForm);
+  const [availabilityForm, setAvailabilityForm] = useState(() =>
+    emptyAvailabilityForm(dateToSchedulingWeekday(new Date())),
+  );
+  const [selectedScheduleDateKeys, setSelectedScheduleDateKeys] = useState(() => [
+    formatScheduleDayKey(new Date()),
+  ]);
+  const [scheduleViewYear, setScheduleViewYear] = useState(() => new Date().getFullYear());
+  const [scheduleViewMonth, setScheduleViewMonth] = useState(() => new Date().getMonth());
   const [editingAvailabilityId, setEditingAvailabilityId] = useState<string | null>(null);
   const [availability, setAvailability] = useState<Availability[]>([]);
   const [doctorSlots, setDoctorSlots] = useState<AppointmentSlot[]>([]);
   const [doctorAppointments, setDoctorAppointments] = useState<Appointment[]>([]);
 
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [assignedDoctorId, setAssignedDoctorId] = useState('');
-  const [patientSlots, setPatientSlots] = useState<AppointmentSlot[]>([]);
   const [patientAppointments, setPatientAppointments] = useState<Appointment[]>([]);
-  const [selectedSlotDate, setSelectedSlotDate] = useState('');
-  const [selectedSlotId, setSelectedSlotId] = useState('');
-  const [reasonForVisit, setReasonForVisit] = useState('');
-  const [patientNote, setPatientNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [timePicker, setTimePicker] = useState<{
     visible: boolean;
     field: 'start_time' | 'end_time' | 'break_start_time' | 'break_end_time' | null;
   }>({ visible: false, field: null });
   const { dialog, hideDialog, showDialog } = useAppDialog();
-
-  const selectedDoctor = useMemo(
-    () => doctors.find((doctor) => doctor.id === selectedDoctorId) ?? null,
-    [doctors, selectedDoctorId],
-  );
-
-  const slotDates = useMemo(
-    () => [...new Set(patientSlots.map((slot) => slot.slot_date))],
-    [patientSlots],
-  );
-
-  const visiblePatientSlots = useMemo(
-    () =>
-      patientSlots.filter((slot) =>
-        selectedSlotDate ? slot.slot_date === selectedSlotDate : true,
-      ),
-    [patientSlots, selectedSlotDate],
-  );
+  const [doctorTab, setDoctorTab] = useState<'schedule' | 'slots' | 'appointments'>('schedule');
 
   const openTimePicker = (
     field: 'start_time' | 'end_time' | 'break_start_time' | 'break_end_time',
@@ -229,7 +223,7 @@ export default function AppointmentsScreen() {
   const loadDoctorData = useCallback(async () => {
     const [availabilityRes, slotsRes, appointmentsRes] = await Promise.all([
       appointmentsService.getDoctorAvailability(),
-      appointmentsService.getDoctorSlots({ days_ahead: 14 }),
+      appointmentsService.getDoctorSlots(),
       appointmentsService.getDoctorAppointments({ limit: 50 }),
     ]);
 
@@ -238,39 +232,17 @@ export default function AppointmentsScreen() {
     setDoctorAppointments(appointmentsRes.items);
   }, []);
 
-  const loadPatientData = useCallback(
-    async (currentSelectedDoctorId?: string) => {
-      const [doctorsRes, profile, appointmentsRes] = await Promise.all([
-        doctorsService.getDoctors({ limit: 50 }),
-        patientsService.getMyPatientProfile().catch(() => null),
-        appointmentsService.getPatientAppointments({ limit: 50 }),
-      ]);
+  const loadPatientData = useCallback(async () => {
+    const [doctorsRes, profile, appointmentsRes] = await Promise.all([
+      doctorsService.getDoctors({ limit: 50 }),
+      patientsService.getMyPatientProfile().catch(() => null),
+      appointmentsService.getPatientAppointments({ limit: 50 }),
+    ]);
 
-      const preferredDoctorId =
-        currentSelectedDoctorId ||
-        params.doctor_id ||
-        selectedDoctorId ||
-        profile?.assignment.doctor?.id ||
-        doctorsRes.items[0]?.id ||
-        '';
-
-      setDoctors(doctorsRes.items);
-      setAssignedDoctorId(profile?.assignment.doctor?.id || '');
-      setSelectedDoctorId(preferredDoctorId);
-      setPatientAppointments(appointmentsRes.items);
-
-      if (preferredDoctorId) {
-        const slotsRes = await appointmentsService.getDoctorPublicSlots(
-          preferredDoctorId,
-          { days_ahead: 14 },
-        );
-        setPatientSlots(slotsRes.items);
-      } else {
-        setPatientSlots([]);
-      }
-    },
-    [params.doctor_id, selectedDoctorId],
-  );
+    setDoctors(doctorsRes.items);
+    setAssignedDoctorId(profile?.assignment.doctor?.id || '');
+    setPatientAppointments(appointmentsRes.items);
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -287,7 +259,6 @@ export default function AppointmentsScreen() {
         setDoctorSlots([]);
         setDoctorAppointments([]);
         setDoctors([]);
-        setPatientSlots([]);
         setPatientAppointments([]);
       }
     } catch (err: any) {
@@ -309,33 +280,21 @@ export default function AppointmentsScreen() {
   );
 
   useEffect(() => {
-    if (role !== 'patient' || !selectedDoctorId) return;
-
-    appointmentsService
-      .getDoctorPublicSlots(selectedDoctorId, { days_ahead: 14 })
-      .then((response) => setPatientSlots(response.items))
-      .catch((err: any) =>
-        setError(formatApiError(err, 'Failed to load doctor availability')),
-      );
-  }, [role, selectedDoctorId]);
-
-  useEffect(() => {
-    if (slotDates.length === 0) {
-      setSelectedSlotDate('');
-      return;
+    if (role === 'patient' && params.doctor_id) {
+      router.replace(`/appointments/doctor/${params.doctor_id}` as never);
     }
-
-    setSelectedSlotDate((current) =>
-      current && slotDates.includes(current) ? current : slotDates[0],
-    );
-  }, [slotDates]);
+  }, [role, params.doctor_id, router]);
 
   const activePickerValue = timePicker.field
     ? availabilityForm[timePicker.field] || ''
     : '';
 
   const resetAvailabilityForm = () => {
-    setAvailabilityForm(emptyAvailabilityForm());
+    const t = new Date();
+    setAvailabilityForm(emptyAvailabilityForm(dateToSchedulingWeekday(t)));
+    setScheduleViewYear(t.getFullYear());
+    setScheduleViewMonth(t.getMonth());
+    setSelectedScheduleDateKeys([formatScheduleDayKey(t)]);
     setEditingAvailabilityId(null);
   };
 
@@ -344,6 +303,11 @@ export default function AppointmentsScreen() {
 
     if (!Number.isFinite(slotDuration)) {
       showDialog('Invalid duration', 'Please choose a valid slot duration.');
+      return;
+    }
+
+    if (!editingAvailabilityId && selectedScheduleDateKeys.length === 0) {
+      showDialog('Select dates', 'Select at least one date on the calendar.');
       return;
     }
 
@@ -362,10 +326,26 @@ export default function AppointmentsScreen() {
       if (editingAvailabilityId) {
         await appointmentsService.updateDoctorAvailability(editingAvailabilityId, payload);
       } else {
-        await appointmentsService.createDoctorAvailability(payload);
+        const uniqueWeekdays = [
+          ...new Set(
+            selectedScheduleDateKeys.map((k) =>
+              dateToSchedulingWeekday(dateKeyToLocalDate(k)),
+            ),
+          ),
+        ].sort((a, b) => WEEKDAY_ORDER.indexOf(a) - WEEKDAY_ORDER.indexOf(b));
+
+        for (const wd of uniqueWeekdays) {
+          const body = { ...payload, weekday: wd };
+          const existing = availability.find((a) => a.weekday === wd);
+          if (existing) {
+            await appointmentsService.updateDoctorAvailability(existing.id, body);
+          } else {
+            await appointmentsService.createDoctorAvailability(body);
+          }
+        }
       }
 
-      await appointmentsService.generateDoctorSlots({ days_ahead: 14 });
+      await appointmentsService.generateDoctorSlots();
       resetAvailabilityForm();
       await loadDoctorData();
     } catch (err: any) {
@@ -378,7 +358,7 @@ export default function AppointmentsScreen() {
   const generateSlots = async () => {
     try {
       setSubmitting(true);
-      const response = await appointmentsService.generateDoctorSlots({ days_ahead: 14 });
+      const response = await appointmentsService.generateDoctorSlots();
       await loadDoctorData();
       showDialog(
         'Slots generated',
@@ -393,6 +373,10 @@ export default function AppointmentsScreen() {
 
   const editAvailability = (item: Availability) => {
     setEditingAvailabilityId(item.id);
+    const anchor = nextOccurrenceDateForWeekday(item.weekday);
+    setScheduleViewYear(anchor.getFullYear());
+    setScheduleViewMonth(anchor.getMonth());
+    setSelectedScheduleDateKeys([formatScheduleDayKey(anchor)]);
     setAvailabilityForm({
       weekday: item.weekday,
       start_time: item.start_time,
@@ -402,6 +386,57 @@ export default function AppointmentsScreen() {
       break_end_time: item.break_end_time || '',
     });
   };
+
+  const shiftScheduleMonth = useCallback((delta: number) => {
+    const d = new Date(scheduleViewYear, scheduleViewMonth + delta, 1);
+    setScheduleViewYear(d.getFullYear());
+    setScheduleViewMonth(d.getMonth());
+  }, [scheduleViewYear, scheduleViewMonth]);
+
+  const scheduleMonthSwipeResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, g) =>
+          Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.1,
+        onMoveShouldSetPanResponderCapture: (_, g) =>
+          Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.1,
+        onPanResponderRelease: (_, g) => {
+          if (g.dx > 48) shiftScheduleMonth(-1);
+          else if (g.dx < -48) shiftScheduleMonth(1);
+        },
+      }),
+    [shiftScheduleMonth],
+  );
+
+  const onPressScheduleCalendarDay = (day: number) => {
+    const key = `${scheduleViewYear}-${String(scheduleViewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (editingAvailabilityId) {
+      setSelectedScheduleDateKeys([key]);
+      setAvailabilityForm((c) => ({
+        ...c,
+        weekday: dateToSchedulingWeekday(new Date(scheduleViewYear, scheduleViewMonth, day)),
+      }));
+      return;
+    }
+    setSelectedScheduleDateKeys((prev) => {
+      if (prev.includes(key)) {
+        if (prev.length <= 1) return prev;
+        return prev.filter((k) => k !== key);
+      }
+      return [...prev, key];
+    });
+  };
+
+  const recurringWeekdaysLabel = useMemo(() => {
+    const unique = [
+      ...new Set(
+        selectedScheduleDateKeys.map((k) =>
+          dateToSchedulingWeekday(dateKeyToLocalDate(k)),
+        ),
+      ),
+    ].sort((a, b) => WEEKDAY_ORDER.indexOf(a) - WEEKDAY_ORDER.indexOf(b));
+    return unique.map((w) => WEEKDAY_LONG[w]).join(', ');
+  }, [selectedScheduleDateKeys]);
 
   const deleteAvailability = (availabilityId: string) => {
     showDialog('Delete availability', 'This removes future open slots from this window.', [
@@ -477,34 +512,6 @@ export default function AppointmentsScreen() {
     ]);
   };
 
-  const bookAppointment = async () => {
-    if (!selectedSlotId) {
-      showDialog('Choose a slot', 'Select one available slot before booking.');
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      await appointmentsService.createPatientAppointment({
-        slot_id: selectedSlotId,
-        reason_for_visit: reasonForVisit.trim() || undefined,
-        patient_note: patientNote.trim() || undefined,
-      });
-      setSelectedSlotId('');
-      setReasonForVisit('');
-      setPatientNote('');
-      await loadPatientData(selectedDoctorId);
-      showDialog(
-        'Appointment confirmed',
-        'Your slot has been booked instantly and now appears in your appointments list.',
-      );
-    } catch (err: any) {
-      showDialog('Unable to book slot', formatApiError(err, 'Please try again.'));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const cancelPatientAppointment = (appointmentId: string) => {
     showDialog('Cancel booking', 'This upcoming booking will be cancelled.', [
       { label: 'Keep booking', onPress: () => {}, variant: 'secondary' },
@@ -514,7 +521,7 @@ export default function AppointmentsScreen() {
         onPress: async () => {
           try {
             await appointmentsService.cancelPatientAppointment(appointmentId);
-            await loadPatientData(selectedDoctorId);
+            await loadPatientData();
           } catch (err: any) {
             showDialog('Unable to cancel', formatApiError(err, 'Please try again.'));
           }
@@ -526,7 +533,7 @@ export default function AppointmentsScreen() {
   if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title="Scheduling" showBack />
+        <Header title={role === 'patient' ? 'Book appointment' : 'Scheduling'} showBack />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -606,7 +613,7 @@ export default function AppointmentsScreen() {
           </View>
         </View>
       </Modal>
-      <Header title="Scheduling" showBack />
+      <Header title={role === 'patient' ? 'Book appointment' : 'Scheduling'} showBack />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -631,269 +638,356 @@ export default function AppointmentsScreen() {
 
           {role === 'doctor' ? (
             <>
-              <Card className="mb-4 bg-surface-soft border-coral-soft shadow-sm">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep mb-1">
-                  Clinician
-                </Text>
-                <Text className="mb-1 text-lg font-semibold text-text leading-6">Automated scheduling</Text>
-                <Text className="text-sm leading-6 text-text-secondary">
-                  Set weekly hours, generate slots, and confirm patient bookings instantly.
-                </Text>
-              </Card>
-
-              <Card className="mb-4 border-border/90">
-                <Text className="mb-3 text-base font-semibold text-text">
-                  {editingAvailabilityId ? 'Update availability' : 'Weekly availability'}
-                </Text>
-
-                <View className="mb-3 flex-row flex-wrap">
-                  {weekdays.map((day) => (
+              <View className="mb-4 flex-row rounded-[20px] border border-coral-soft bg-white p-1">
+                {(
+                  [
+                    { key: 'schedule' as const, label: 'Schedule' },
+                    { key: 'slots' as const, label: 'Slots' },
+                    { key: 'appointments' as const, label: 'Visits' },
+                  ] as const
+                ).map((tab) => {
+                  const active = doctorTab === tab.key;
+                  return (
                     <TouchableOpacity
-                      key={day.value}
+                      key={tab.key}
+                      onPress={() => setDoctorTab(tab.key)}
+                      className={`flex-1 rounded-2xl py-2.5 ${active ? 'bg-coral-soft' : ''}`}
+                      activeOpacity={0.85}
+                    >
+                      <Text
+                        className={`text-center text-sm font-bold ${
+                          active ? 'text-coral-ink' : 'text-text-secondary'
+                        }`}
+                      >
+                        {tab.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {doctorTab === 'schedule' ? (
+                <>
+                  <Card className="mb-4 border-coral-soft bg-white">
+                    <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-coral-deep">
+                      Clinician
+                    </Text>
+                    <Text className="text-base font-semibold text-text">
+                      {editingAvailabilityId ? 'Update window' : 'New availability window'}
+                    </Text>
+
+                    <View className="mt-2">
+                      <AppointmentMonthCalendar
+                        viewYear={scheduleViewYear}
+                        viewMonth={scheduleViewMonth}
+                        panHandlers={scheduleMonthSwipeResponder.panHandlers}
+                        onShiftMonth={shiftScheduleMonth}
+                        isDaySelected={(dayKey) =>
+                          editingAvailabilityId
+                            ? selectedScheduleDateKeys[0] === dayKey
+                            : selectedScheduleDateKeys.includes(dayKey)
+                        }
+                        onPressCalendarDay={onPressScheduleCalendarDay}
+                      />
+                    </View>
+                    <Text className="mb-3 text-xs text-text-secondary">
+                      Recurring weekly on{' '}
+                      <Text className="font-semibold text-text">{recurringWeekdaysLabel}</Text>
+                      {editingAvailabilityId
+                        ? '.'
+                        : '. Tap multiple dates (same month or others) to apply these hours to every matching weekday; tap again to remove.'}
+                    </Text>
+
+                    <Text className="mb-2 text-xs font-semibold uppercase text-text-secondary">
+                      Session hours
+                    </Text>
+                    <View className="mb-4 flex-row gap-2">
+                      <TouchableOpacity
+                        onPress={() => openTimePicker('start_time')}
+                        className="flex-1 rounded-full border border-coral-soft bg-coral-soft px-3 py-3"
+                        activeOpacity={0.85}
+                      >
+                        <Text className="text-center text-[10px] font-bold uppercase tracking-wide text-text-secondary">
+                          Start
+                        </Text>
+                        <Text className="mt-1 text-center text-lg font-bold text-coral-ink">
+                          {availabilityForm.start_time}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => openTimePicker('end_time')}
+                        className="flex-1 rounded-full border border-coral-soft bg-coral-soft px-3 py-3"
+                        activeOpacity={0.85}
+                      >
+                        <Text className="text-center text-[10px] font-bold uppercase tracking-wide text-text-secondary">
+                          End
+                        </Text>
+                        <Text className="mt-1 text-center text-lg font-bold text-coral-ink">
+                          {availabilityForm.end_time}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text className="mb-2 text-xs font-semibold uppercase text-text-secondary">
+                      Slot length
+                    </Text>
+                    <View className="mb-4 flex-row flex-wrap gap-2">
+                      {slotDurationOptions.map((opt) => {
+                        const active = availabilityForm.slot_duration_minutes === opt;
+                        return (
+                          <TouchableOpacity
+                            key={opt}
+                            onPress={() =>
+                              setAvailabilityForm((current) => ({
+                                ...current,
+                                slot_duration_minutes: opt,
+                              }))
+                            }
+                            className={`rounded-full border px-4 py-2.5 ${
+                              active
+                                ? 'border-coral-deep bg-coral-soft'
+                                : 'border-border bg-white'
+                            }`}
+                          >
+                            <Text
+                              className={`text-sm font-semibold ${
+                                active ? 'text-coral-ink' : 'text-text'
+                              }`}
+                            >
+                              {opt} min
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    <Text className="mb-2 text-xs font-semibold uppercase text-text-secondary">
+                      Break (optional)
+                    </Text>
+                    <View className="mb-2 flex-row gap-2">
+                      <TouchableOpacity
+                        onPress={() => openTimePicker('break_start_time')}
+                        className="flex-1 rounded-full border border-border bg-bg-secondary px-3 py-2.5"
+                        activeOpacity={0.85}
+                      >
+                        <Text className="text-center text-[10px] font-semibold text-text-secondary">
+                          From
+                        </Text>
+                        <Text className="mt-0.5 text-center text-base font-semibold text-text">
+                          {availabilityForm.break_start_time || '—'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => openTimePicker('break_end_time')}
+                        className="flex-1 rounded-full border border-border bg-bg-secondary px-3 py-2.5"
+                        activeOpacity={0.85}
+                      >
+                        <Text className="text-center text-[10px] font-semibold text-text-secondary">
+                          To
+                        </Text>
+                        <Text className="mt-0.5 text-center text-base font-semibold text-text">
+                          {availabilityForm.break_end_time || '—'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <TouchableOpacity
                       onPress={() =>
                         setAvailabilityForm((current) => ({
                           ...current,
-                          weekday: day.value,
+                          break_start_time: '',
+                          break_end_time: '',
                         }))
                       }
-                      className={`mb-2 mr-2 rounded-xl border px-4 py-3 ${
-                        availabilityForm.weekday === day.value
-? 'border-coral-deep bg-coral-soft'
-                            : 'border-border bg-background'
-                      }`}
+                      className="mb-4 self-start py-1"
                     >
-                      <Text
-                        className={`text-sm font-semibold ${
-                          availabilityForm.weekday === day.value
-                            ? 'text-coral-ink'
-                            : 'text-text'
-                        }`}
-                      >
-                        {day.label}
+                      <Text className="text-xs font-semibold text-coral-deep">Clear break</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={submitAvailability}
+                      disabled={submitting}
+                      className="items-center rounded-2xl bg-coral py-4 active:opacity-90 disabled:opacity-50"
+                      activeOpacity={0.85}
+                    >
+                      <Text className="text-base font-bold text-white">
+                        {submitting
+                          ? 'Saving…'
+                          : editingAvailabilityId
+                            ? 'Update availability'
+                            : 'Save availability'}
                       </Text>
                     </TouchableOpacity>
-                  ))}
-                </View>
+                    {editingAvailabilityId ? (
+                      <TouchableOpacity onPress={resetAvailabilityForm} className="mt-3 items-center py-2">
+                        <Text className="text-sm font-semibold text-text-secondary">Cancel edit</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </Card>
 
-                <TimeField
-                  label="Start time"
-                  value={availabilityForm.start_time}
-                  helperText="Open the same picker used across web and mobile."
-                  onPress={() => openTimePicker('start_time')}
-                />
-
-                <TimeField
-                  label="End time"
-                  value={availabilityForm.end_time}
-                  helperText="Open the same picker used across web and mobile."
-                  onPress={() => openTimePicker('end_time')}
-                />
-
-                <Select
-                  label="Slot duration"
-                  value={availabilityForm.slot_duration_minutes}
-                  options={slotDurationOptions}
-                  onSelect={(value) =>
-                    setAvailabilityForm((current) => ({
-                      ...current,
-                      slot_duration_minutes: value,
-                    }))
-                  }
-                  helperText="Minutes per consultation."
-                />
-
-                <TimeField
-                  label="Break start"
-                  value={availabilityForm.break_start_time || 'No break'}
-                  helperText="Optional. Leave empty if you do not need a break."
-                  onPress={() => openTimePicker('break_start_time')}
-                  onClear={() =>
-                    setAvailabilityForm((current) => ({
-                      ...current,
-                      break_start_time: '',
-                      break_end_time: '',
-                    }))
-                  }
-                />
-
-                <TimeField
-                  label="Break end"
-                  value={availabilityForm.break_end_time || 'No break'}
-                  helperText="Optional. Leave empty if you do not need a break."
-                  onPress={() => openTimePicker('break_end_time')}
-                />
-
-                <Button fullWidth loading={submitting} onPress={submitAvailability}>
-                  {editingAvailabilityId ? 'Update availability' : 'Save availability'}
-                </Button>
-                {editingAvailabilityId ? (
-                  <Button
-                    variant="outline"
-                    fullWidth
-                    className="mt-3"
-                    onPress={resetAvailabilityForm}
-                  >
-                    Cancel edit
-                  </Button>
-                ) : null}
-              </Card>
-
-              <Card className="mb-4 border-border/90">
-                <View className="mb-3 flex-row items-center justify-between">
-                  <Text className="text-base font-semibold text-text">
-                    Saved availability
-                  </Text>
-                  <Button size="sm" onPress={generateSlots} loading={submitting}>
-                    Generate slots
-                  </Button>
-                </View>
-                {availability.length === 0 ? (
-                  <Text className="text-sm text-text-secondary">
-                    Add a weekly window to start generating future appointment slots.
-                  </Text>
-                ) : (
-                  availability.map((item) => (
-                    <View
-                      key={item.id}
-                      className="mb-3 rounded-xl border border-border bg-background p-4"
-                    >
-                      <View className="mb-2 flex-row items-center justify-between">
-                        <Text className="text-base font-semibold text-text">
-                          {weekdays.find((day) => day.value === item.weekday)?.label} {item.start_time}
-                          {' - '}
-                          {item.end_time}
+                  <Card className="mb-4 border-coral-soft bg-white">
+                    <View className="mb-3 flex-row items-center justify-between">
+                      <Text className="text-sm font-bold text-text">Saved windows</Text>
+                      <TouchableOpacity
+                        onPress={generateSlots}
+                        disabled={submitting}
+                        className="rounded-full bg-coral-soft px-4 py-2"
+                        activeOpacity={0.85}
+                      >
+                        <Text className="text-xs font-bold text-coral-ink">
+                          {submitting ? '…' : 'Generate slots'}
                         </Text>
-                        <Badge variant={item.is_active ? 'success' : 'warning'} size="sm">
-                          {item.is_active ? 'ACTIVE' : 'INACTIVE'}
-                        </Badge>
-                      </View>
-                      <Text className="mb-3 text-sm text-text-secondary">
-                        {item.slot_duration_minutes} minute slots
-                        {item.break_start_time && item.break_end_time
-                          ? ` - break ${item.break_start_time}-${item.break_end_time}`
-                          : ''}
-                      </Text>
-                      <View className="flex-row">
-                        <Button
-                          variant="outline"
-                          className="mr-2 flex-1"
-                          onPress={() => editAvailability(item)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="text"
-                          className="flex-1"
-                          onPress={() => deleteAvailability(item.id)}
-                        >
-                          Delete
-                        </Button>
-                      </View>
+                      </TouchableOpacity>
                     </View>
-                  ))
-                )}
-              </Card>
+                    {availability.length === 0 ? (
+                      <Text className="text-sm font-medium text-text-secondary">
+                        Save a window, then generate slots for the next two weeks.
+                      </Text>
+                    ) : (
+                      availability.map((item) => (
+                        <View
+                          key={item.id}
+                          className="mb-2 rounded-2xl border border-coral-soft/90 bg-surface-soft px-3 py-3 last:mb-0"
+                        >
+                          <View className="mb-1 flex-row items-center justify-between">
+                            <Text className="text-sm font-bold text-text">
+                              {weekdays.find((day) => day.value === item.weekday)?.label} ·{' '}
+                              {item.start_time}–{item.end_time}
+                            </Text>
+                            <Badge variant={item.is_active ? 'success' : 'warning'} size="sm">
+                              {item.is_active ? 'ACTIVE' : 'INACTIVE'}
+                            </Badge>
+                          </View>
+                          <Text className="mb-2 text-xs text-text-secondary">
+                            {item.slot_duration_minutes} min slots
+                            {item.break_start_time && item.break_end_time
+                              ? ` · break ${item.break_start_time}–${item.break_end_time}`
+                              : ''}
+                          </Text>
+                          <View className="flex-row gap-2">
+                            <TouchableOpacity
+                              onPress={() => editAvailability(item)}
+                              className="flex-1 items-center rounded-full border border-coral-soft py-2"
+                            >
+                              <Text className="text-xs font-bold text-coral-ink">Edit</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => deleteAvailability(item.id)}
+                              className="flex-1 items-center rounded-full border border-border py-2"
+                            >
+                              <Text className="text-xs font-bold text-text-secondary">Delete</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </Card>
+                </>
+              ) : null}
 
-              <Card className="mb-4 border-border/90">
-                <Text className="mb-3 text-base font-semibold text-text">
-                  Slot overview
-                </Text>
-                {doctorSlots.length === 0 ? (
-                  <Text className="text-sm text-text-secondary">
-                    Generate slots to see the next available, booked, blocked, and
-                    completed time windows.
+              {doctorTab === 'slots' ? (
+                <Card className="mb-4 border-coral-soft bg-white">
+                  <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-coral-deep">
+                    Slot board
                   </Text>
-                ) : (
-                  doctorSlots.slice(0, 12).map((slot) => (
-                    <View
-                      key={slot.id}
-                      className="mb-3 rounded-xl border border-border bg-background p-4"
-                    >
-                      <View className="mb-2 flex-row items-center justify-between">
-                        <Text className="text-base font-semibold text-text">
-                          {slot.display_date} at {slot.display_time}
+                  <Text className="mb-3 text-sm text-text-secondary">
+                    Live slots — available, booked, blocked, or completed.
+                  </Text>
+                  {doctorSlots.length === 0 ? (
+                    <Text className="text-sm font-medium text-text-secondary">
+                      Generate slots from the Schedule tab to populate this list.
+                    </Text>
+                  ) : (
+                    doctorSlots.slice(0, 12).map((slot) => (
+                      <View
+                        key={slot.id}
+                        className="mb-2 rounded-2xl border border-coral-soft/80 bg-surface-soft px-3 py-3 last:mb-0"
+                      >
+                        <View className="mb-1 flex-row items-center justify-between">
+                          <Text className="text-sm font-bold text-text">
+                            {slot.display_date} · {slot.display_time}
+                          </Text>
+                          <Badge variant={getBadgeVariant(slot.status)} size="sm">
+                            {slot.status.toUpperCase()}
+                          </Badge>
+                        </View>
+                        <Text className="mb-2 text-xs text-text-secondary">
+                          {slot.patient_name ? `Patient: ${slot.patient_name}` : 'Open for booking'}
                         </Text>
-                        <Badge variant={getBadgeVariant(slot.status)} size="sm">
-                          {slot.status.toUpperCase()}
-                        </Badge>
+                        {slot.status === 'available' ? (
+                          <TouchableOpacity
+                            onPress={() => blockSlot(slot.id)}
+                            className="items-center rounded-full border border-coral-soft py-2"
+                          >
+                            <Text className="text-xs font-bold text-coral-ink">Block slot</Text>
+                          </TouchableOpacity>
+                        ) : null}
                       </View>
-                      <Text className="mb-3 text-sm text-text-secondary">
-                        {slot.patient_name
-                          ? `Patient: ${slot.patient_name}`
-                          : 'Open for booking'}
-                      </Text>
-                      {slot.status === 'available' ? (
-                        <Button
-                          variant="outline"
-                          fullWidth
-                          onPress={() => blockSlot(slot.id)}
-                        >
-                          Block slot
-                        </Button>
-                      ) : null}
-                    </View>
-                  ))
-                )}
-              </Card>
+                    ))
+                  )}
+                </Card>
+              ) : null}
 
-              <Card className="border-border/90">
-                <Text className="mb-3 text-base font-semibold text-text">
-                  Upcoming confirmed appointments
-                </Text>
-                {doctorAppointments.length === 0 ? (
-                  <Text className="text-sm text-text-secondary">
-                    Booked appointments will show here as soon as patients select a slot.
+              {doctorTab === 'appointments' ? (
+                <Card className="border-coral-soft bg-white">
+                  <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-coral-deep">
+                    Confirmed visits
                   </Text>
-                ) : (
-                  doctorAppointments.map((appointment) => (
-                    <View
-                      key={appointment.id}
-                      className="mb-3 rounded-[18px] border border-coral-soft bg-surface-soft p-4"
-                    >
-                        <View className="mb-2 flex-row items-center justify-between">
-                          <Text className="text-base font-semibold text-text">
+                  <Text className="mb-3 text-sm text-text-secondary">
+                    Upcoming patient appointments you&apos;ve accepted.
+                  </Text>
+                  {doctorAppointments.length === 0 ? (
+                    <Text className="text-sm font-medium text-text-secondary">
+                      Bookings appear here when patients book your open slots.
+                    </Text>
+                  ) : (
+                    doctorAppointments.map((appointment) => (
+                      <View
+                        key={appointment.id}
+                        className="mb-2 rounded-2xl border border-coral-soft bg-surface-soft px-3 py-3 last:mb-0"
+                      >
+                        <View className="mb-1 flex-row items-center justify-between">
+                          <Text className="text-sm font-bold text-text">
                             {appointment.patient_name || 'Patient'}
                           </Text>
                           <Badge variant={getBadgeVariant(appointment.status)} size="sm">
                             {appointment.status.toUpperCase()}
                           </Badge>
                         </View>
-                        <Text className="mb-1 text-sm text-text-secondary">
-                          {appointment.display_date} at {appointment.display_time}
+                        <Text className="text-xs text-text-secondary">
+                          {appointment.display_date} · {appointment.display_time}
                         </Text>
-                        <Text className="mb-3 text-sm text-text-secondary">
+                        <Text className="mb-2 text-xs text-text-secondary">
                           {appointment.reason_for_visit || 'General consultation'}
                         </Text>
-                        <View className="flex-row">
-                          <Button
-                            variant="text"
-                            className={appointment.status === 'booked' ? 'mr-2' : ''}
+                        <View className="flex-row flex-wrap gap-2">
+                          <TouchableOpacity
                             onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                            className="rounded-full border border-coral-soft px-3 py-1.5"
                           >
-                            Details
-                          </Button>
+                            <Text className="text-xs font-bold text-coral-ink">Details</Text>
+                          </TouchableOpacity>
                           {appointment.status === 'booked' ? (
                             <>
-                              <Button
-                                variant="outline"
-                                className="mr-2 flex-1"
+                              <TouchableOpacity
                                 onPress={() => cancelDoctorAppointment(appointment.id)}
+                                className="rounded-full border border-border px-3 py-1.5"
                               >
-                                Cancel
-                              </Button>
-                              <Button
-                                className="flex-1"
+                                <Text className="text-xs font-bold text-text-secondary">Cancel</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
                                 onPress={() => completeDoctorAppointment(appointment.id)}
+                                className="rounded-full bg-coral px-3 py-1.5"
                               >
-                                Complete
-                              </Button>
+                                <Text className="text-xs font-bold text-white">Complete</Text>
+                              </TouchableOpacity>
                             </>
                           ) : null}
                         </View>
-                    </View>
-                  ))
-                )}
-              </Card>
+                      </View>
+                    ))
+                  )}
+                </Card>
+              ) : null}
             </>
           ) : role === 'patient' ? (
             <>
@@ -903,7 +997,7 @@ export default function AppointmentsScreen() {
                 </Text>
                 <Text className="mb-1 text-lg font-semibold text-text leading-6">Book a visit</Text>
                 <Text className="text-sm leading-6 text-text-secondary">
-                  Choose your doctor, pick an open slot, and your booking is confirmed immediately.
+                  Choose a doctor, select a time, then confirm — same booking flow as before, step by step.
                 </Text>
               </Card>
 
@@ -925,7 +1019,7 @@ export default function AppointmentsScreen() {
                   Select doctor
                 </Text>
                 <Text className="mb-3 text-sm text-text-secondary leading-5">
-                  Your care team is highlighted; you can still view other clinicians with open slots.
+                  Open a profile to book. Your care team is highlighted below.
                 </Text>
                 {doctors.length === 0 ? (
                   <Text className="text-sm text-text-secondary">
@@ -933,143 +1027,39 @@ export default function AppointmentsScreen() {
                   </Text>
                 ) : (
                   <View>
-                    {doctors.map((doctor) => {
-                      const selected = selectedDoctorId === doctor.id;
-                      return (
-                        <TouchableOpacity
-                          key={doctor.id}
-                          onPress={() => {
-                            setSelectedDoctorId(doctor.id);
-                            setSelectedSlotId('');
-                          }}
-                          activeOpacity={0.88}
-                          className="mb-3 last:mb-0"
-                        >
-                          <View
-                            className={`overflow-hidden rounded-[18px] border bg-surface-soft pl-0 flex-row ${
-                              selected ? 'border-coral-deep' : 'border-coral-soft'
-                            }`}
-                          >
-                            <View className="w-1.5 bg-coral self-stretch" />
-                            <View className="flex-1 py-3 pr-3 pl-3">
-                              <View className="flex-row items-start justify-between gap-2">
-                                <View className="flex-1">
-                                  <Text
-                                    className={`text-base font-semibold ${
-                                      selected ? 'text-coral-ink' : 'text-text'
-                                    }`}
-                                  >
-                                    {doctor.name}
-                                  </Text>
-                                  <Text className="text-sm text-text-secondary mt-0.5">
-                                    {doctor.specialization}
-                                  </Text>
-                                </View>
-                                {assignedDoctorId === doctor.id ? (
-                                  <View className="rounded-full bg-coral-soft px-2.5 py-1">
-                                    <Text className="text-[10px] font-bold uppercase tracking-wide text-coral-deep">
-                                      Care team
-                                    </Text>
-                                  </View>
-                                ) : null}
-                              </View>
-                            </View>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
-              </Card>
-
-              <Card className="mb-4 border-border/90">
-                <Text className="mb-3 text-base font-semibold text-text">
-                  Available slots
-                </Text>
-                {selectedDoctor ? (
-                  <Text className="mb-3 text-sm text-text-secondary">
-                    Showing live availability for {selectedDoctor.name}.
-                  </Text>
-                ) : null}
-                {slotDates.length > 0 ? (
-                  <View className="mb-3 flex-row flex-wrap">
-                    {slotDates.map((slotDate) => (
+                    {doctors.map((doctor) => (
                       <TouchableOpacity
-                        key={slotDate}
-                        onPress={() => {
-                          setSelectedSlotDate(slotDate);
-                          setSelectedSlotId('');
-                        }}
-                        className={`mb-2 mr-2 rounded-xl border px-4 py-3 ${
-                          selectedSlotDate === slotDate
-                            ? 'border-coral-deep bg-coral-soft'
-                            : 'border-border bg-background'
-                        }`}
+                        key={doctor.id}
+                        onPress={() =>
+                          router.push(`/appointments/doctor/${doctor.id}` as never)
+                        }
+                        activeOpacity={0.88}
+                        className="mb-3 last:mb-0"
                       >
-                        <Text
-                          className={`text-sm font-semibold ${
-                            selectedSlotDate === slotDate ? 'text-coral-ink' : 'text-text'
-                          }`}
-                        >
-                          {new Date(`${slotDate}T00:00:00`).toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </Text>
+                        <View className="overflow-hidden rounded-[18px] border border-coral-soft bg-surface-soft pl-0 flex-row">
+                          <View className="w-1.5 bg-coral self-stretch" />
+                          <View className="flex-1 flex-row items-center justify-between py-3 pr-3 pl-3">
+                            <View className="flex-1">
+                              <Text className="text-base font-semibold text-text">{doctor.name}</Text>
+                              <Text className="text-sm text-text-secondary mt-0.5">
+                                {doctor.specialization}
+                              </Text>
+                            </View>
+                            {assignedDoctorId === doctor.id ? (
+                              <View className="rounded-full bg-coral-soft px-2.5 py-1">
+                                <Text className="text-[10px] font-bold uppercase tracking-wide text-coral-deep">
+                                  Care team
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text className="text-xs font-semibold text-coral-deep">Book →</Text>
+                            )}
+                          </View>
+                        </View>
                       </TouchableOpacity>
                     ))}
                   </View>
-                ) : null}
-                {patientSlots.length === 0 ? (
-                  <Text className="text-sm text-text-secondary">
-                    No open slots found for the selected doctor yet.
-                  </Text>
-                ) : (
-                  visiblePatientSlots.slice(0, 16).map((slot) => (
-                    <TouchableOpacity
-                      key={slot.id}
-                      onPress={() => setSelectedSlotId(slot.id)}
-                      className={`mb-3 rounded-xl border p-4 ${
-                        selectedSlotId === slot.id
-                          ? 'border-coral-deep bg-coral-soft'
-                          : 'border-border bg-background'
-                      }`}
-                    >
-                      <Text className="text-base font-semibold text-text">
-                        {slot.display_date} at {slot.display_time}
-                      </Text>
-                      <Text className="mt-1 text-sm text-text-secondary">
-                        Tap to book this slot instantly.
-                      </Text>
-                    </TouchableOpacity>
-                  ))
                 )}
-              </Card>
-
-              <Card className="mb-4 border-border/90">
-                <Text className="mb-3 text-base font-semibold text-text">
-                  Booking details
-                </Text>
-                <TextInput
-                  className="mb-3 rounded-xl border border-border px-4 py-3 text-text"
-                  placeholder="Reason for visit"
-                  placeholderTextColor="#9CA3AF"
-                  value={reasonForVisit}
-                  onChangeText={setReasonForVisit}
-                />
-                <TextInput
-                  className="min-h-[110px] rounded-xl border border-border px-4 py-3 text-text"
-                  placeholder="Optional note"
-                  placeholderTextColor="#9CA3AF"
-                  value={patientNote}
-                  onChangeText={setPatientNote}
-                  multiline
-                  textAlignVertical="top"
-                />
-                <Button fullWidth className="mt-4" onPress={bookAppointment} loading={submitting}>
-                  Book selected slot
-                </Button>
               </Card>
 
               <Card className="border-border/90">
@@ -1079,7 +1069,7 @@ export default function AppointmentsScreen() {
                 {patientAppointments.length === 0 ? (
                   <EmptyState
                     title="No bookings yet"
-                    message="Pick a doctor and choose one of the available slots above."
+                    message="Choose a doctor above to start the booking flow."
                   />
                 ) : (
                   patientAppointments.map((appointment) => (
@@ -1087,38 +1077,38 @@ export default function AppointmentsScreen() {
                       key={appointment.id}
                       className="mb-3 rounded-[18px] border border-coral-soft bg-surface-soft p-4"
                     >
-                        <View className="mb-2 flex-row items-center justify-between">
-                          <Text className="text-base font-semibold text-text">
-                            {appointment.doctor_name || 'Doctor'}
-                          </Text>
-                          <Badge variant={getBadgeVariant(appointment.status)} size="sm">
-                            {appointment.status.toUpperCase()}
-                          </Badge>
-                        </View>
-                        <Text className="mb-1 text-sm text-text-secondary">
-                          {appointment.display_date} at {appointment.display_time}
+                      <View className="mb-2 flex-row items-center justify-between">
+                        <Text className="text-base font-semibold text-text">
+                          {appointment.doctor_name || 'Doctor'}
                         </Text>
-                        <Text className="mb-3 text-sm text-text-secondary">
-                          {appointment.reason_for_visit || 'General consultation'}
-                        </Text>
-                        <View className="flex-row">
+                        <Badge variant={getBadgeVariant(appointment.status)} size="sm">
+                          {appointment.status.toUpperCase()}
+                        </Badge>
+                      </View>
+                      <Text className="mb-1 text-sm text-text-secondary">
+                        {appointment.display_date} at {appointment.display_time}
+                      </Text>
+                      <Text className="mb-3 text-sm text-text-secondary">
+                        {appointment.reason_for_visit || 'General consultation'}
+                      </Text>
+                      <View className="flex-row">
+                        <Button
+                          variant="text"
+                          className={appointment.status === 'booked' ? 'mr-2' : ''}
+                          onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                        >
+                          Details
+                        </Button>
+                        {appointment.status === 'booked' ? (
                           <Button
-                            variant="text"
-                            className={appointment.status === 'booked' ? 'mr-2' : ''}
-                            onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                            variant="outline"
+                            className="flex-1"
+                            onPress={() => cancelPatientAppointment(appointment.id)}
                           >
-                            Details
+                            Cancel booking
                           </Button>
-                          {appointment.status === 'booked' ? (
-                            <Button
-                              variant="outline"
-                              className="flex-1"
-                              onPress={() => cancelPatientAppointment(appointment.id)}
-                            >
-                              Cancel booking
-                            </Button>
-                          ) : null}
-                        </View>
+                        ) : null}
+                      </View>
                     </View>
                   ))
                 )}

@@ -155,6 +155,7 @@ export default function LoginScreen() {
 
               <Input
                 type="password"
+                passwordMode="current"
                 label="Password"
                 placeholder="Password"
                 value={password}

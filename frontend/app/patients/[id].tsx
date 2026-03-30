@@ -123,28 +123,9 @@ export default function PatientDetailsScreen() {
     role === 'doctor'
       ? [
           {
-            id: 'edit',
-            label: 'Edit patient record',
-            onPress: () => router.push(`/patients/${patient.id}/edit` as any),
-          },
-          {
-            id: 'whatif',
-            label: 'What-if analysis',
-            onPress: () => router.push(`/patients/${patient.id}/what-if` as any),
-          },
-          {
             id: 'compare',
             label: 'Compare doctor plan',
             onPress: () => router.push(`/patients/${patient.id}/compare-plan` as any),
-          },
-          {
-            id: 'reports',
-            label: 'Reports workspace',
-            onPress: () =>
-              router.push({
-                pathname: '/reports',
-                params: { patientId: patient.id },
-              } as any),
           },
         ]
       : [];
@@ -167,7 +148,6 @@ export default function PatientDetailsScreen() {
               <Text className="text-xl font-bold text-white mb-1 tracking-tight" numberOfLines={2}>
                 {patient.full_name || `Patient ${patient.patient_id}`}
               </Text>
-              <Text className="text-sm text-white/88">ID {patient.patient_id}</Text>
               <Text className="text-sm text-white/80 mt-1">
                 {patient.demographics.age} yrs · {patient.demographics.gender}
               </Text>
@@ -194,8 +174,10 @@ export default function PatientDetailsScreen() {
             <SectionHeader eyebrow="Record" title="Demographics" />
             <View className="flex-row flex-wrap gap-x-6 gap-y-3">
               <View>
-                <Text className="text-xs font-medium text-text-secondary mb-0.5">Patient ID</Text>
-                <Text className="text-base font-semibold text-text">{patient.patient_id}</Text>
+                <Text className="text-xs font-medium text-text-secondary mb-0.5">Full name</Text>
+                <Text className="text-base font-semibold text-text">
+                  {patient.full_name?.trim() || patient.patient_id}
+                </Text>
               </View>
               <View>
                 <Text className="text-xs font-medium text-text-secondary mb-0.5">Age</Text>

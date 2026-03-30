@@ -373,7 +373,10 @@ function WhatIfDashboardCard({ comparison }: { comparison: Record<string, any> }
           <Text style={styles.whatIfLabel}>Baseline</Text>
           <Text style={styles.whatIfValue}>{formatRiskPercent(baseline?.risk_score)}</Text>
           <View style={[styles.whatIfPill, { backgroundColor: baselinePill.backgroundColor }]}>
-            <Text style={[styles.whatIfPillText, { color: baselinePill.color }]}>
+              <Text
+                style={[styles.whatIfPillText, { color: baselinePill.color }]}
+                numberOfLines={1}
+              >
               {String(baseline?.risk_label || 'low').toUpperCase()}
             </Text>
           </View>
@@ -383,7 +386,10 @@ function WhatIfDashboardCard({ comparison }: { comparison: Record<string, any> }
           <Text style={styles.whatIfLabel}>Scenario</Text>
           <Text style={styles.whatIfValue}>{formatRiskPercent(scenario?.risk_score)}</Text>
           <View style={[styles.whatIfPill, { backgroundColor: scenarioPill.backgroundColor }]}>
-            <Text style={[styles.whatIfPillText, { color: scenarioPill.color }]}>
+              <Text
+                style={[styles.whatIfPillText, { color: scenarioPill.color }]}
+                numberOfLines={1}
+              >
               {String(scenario?.risk_label || 'low').toUpperCase()}
             </Text>
           </View>
@@ -434,6 +440,9 @@ export default function ChatbotScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
+  // Bottom tab bar is absolute-positioned in `app/(tabs)/_layout.tsx` and overlays content.
+  // Clear it so the composer ("Send") and the last messages are not hidden underneath.
+  const tabBarHeight = 62 + Math.max(insets.bottom, 0);
   const requestedPatientId =
     typeof params.patientId === 'string' ? params.patientId : null;
   const requestedSeedPrompt =
@@ -487,7 +496,15 @@ export default function ChatbotScreen() {
         const res = await doctorsService.getMyPatients();
         const options = res.items.map((p) => ({
           id: p.id,
-          label: p.full_name || p.patient_id || p.id,
+          // Some backend responses may not include `full_name` consistently.
+          // Prefer name-like fields for doctor UI, fall back to `patient_id`.
+          label:
+            (p.full_name && p.full_name.trim()) ||
+            ((p as any).fullName && String((p as any).fullName).trim()) ||
+            ((p as any).name && String((p as any).name).trim()) ||
+            ((p as any).patient_name && String((p as any).patient_name).trim()) ||
+            p.patient_id ||
+            p.id,
         }));
         setPatientOptions(options);
         const initialPatient =
@@ -901,7 +918,11 @@ export default function ChatbotScreen() {
           {patientContext ? (
             <View style={styles.contextCard}>
               <Text style={styles.contextLabel}>Active patient context</Text>
-              <Text style={styles.contextText}>
+              <Text
+                style={styles.contextText}
+                numberOfLines={isDesktop ? undefined : 4}
+                ellipsizeMode="tail"
+              >
                 {(patientContext.risk_summary as string) ||
                   (patientContext.latest_risk_summary as string) ||
                   'The assistant will use the latest saved patient profile and recommendations.'}
@@ -922,7 +943,11 @@ export default function ChatbotScreen() {
               style={styles.messageList}
               contentContainerStyle={[
                 styles.messageListContent,
-                { paddingHorizontal: isDesktop ? 32 : 16 },
+                  {
+                    paddingHorizontal: isDesktop ? 32 : 16,
+                    // Keep the last message above the absolute tab bar.
+                    paddingBottom: 24 + tabBarHeight,
+                  },
               ]}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -932,7 +957,8 @@ export default function ChatbotScreen() {
             <View
               style={[
                 styles.composerShell,
-                { paddingBottom: Math.max(insets.bottom, 12) },
+                // Clear absolute bottom tab bar.
+                { paddingBottom: tabBarHeight + 8 },
               ]}
             >
               <View style={styles.composerCard}>
@@ -1364,6 +1390,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.light,
     padding: 14,
+    overflow: 'hidden',
   },
   whatIfTitle: {
     color: colors.text.primary,
@@ -1373,11 +1400,12 @@ const styles = StyleSheet.create({
   },
   whatIfSummaryRow: {
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
   whatIfSummaryColumn: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: colors.background.card,
     borderRadius: 14,
     padding: 12,

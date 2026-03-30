@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputProps,
   View,
 } from 'react-native';
 
@@ -23,6 +24,8 @@ const COLORS = {
 
 const Input: React.FC<InputProps> = ({
   type = 'text',
+  passwordMode = 'current',
+  usernameField = false,
   label,
   placeholder,
   value,
@@ -55,6 +58,47 @@ const Input: React.FC<InputProps> = ({
     }
   }, [type]);
 
+  const nativeAutofill = useMemo((): Pick<
+    TextInputProps,
+    'autoComplete' | 'textContentType' | 'importantForAutofill'
+  > => {
+    const androidImportant: Pick<TextInputProps, 'importantForAutofill'> =
+      Platform.OS === 'android' ? { importantForAutofill: 'yes' } : {};
+
+    if (type === 'email') {
+      return {
+        autoComplete: 'email',
+        textContentType: 'emailAddress',
+        ...androidImportant,
+      };
+    }
+
+    if (isPassword) {
+      if (passwordMode === 'new') {
+        return {
+          autoComplete: 'password-new',
+          textContentType: 'newPassword',
+          ...androidImportant,
+        };
+      }
+      return {
+        autoComplete: 'password',
+        textContentType: 'password',
+        ...androidImportant,
+      };
+    }
+
+    if (usernameField) {
+      return {
+        autoComplete: 'username',
+        textContentType: 'username',
+        ...androidImportant,
+      };
+    }
+
+    return {};
+  }, [type, isPassword, passwordMode, usernameField]);
+
   return (
     <View style={styles.wrapper}>
       {label ? (
@@ -84,20 +128,15 @@ const Input: React.FC<InputProps> = ({
           value={value}
           onChangeText={onChangeText}
           keyboardType={keyboardType}
-          autoCapitalize={type === 'email' ? 'none' : 'sentences'}
-          autoCorrect={type === 'email' || isPassword ? false : true}
+          autoCapitalize={type === 'email' || usernameField ? 'none' : 'sentences'}
+          autoCorrect={type === 'email' || isPassword || usernameField ? false : true}
           secureTextEntry={shouldHidePassword}
           editable={!disabled}
           multiline={multiline}
           numberOfLines={numberOfLines}
-          returnKeyType={multiline ? 'default' : 'done'}
+          returnKeyType={multiline ? 'default' : type === 'email' ? 'next' : 'done'}
           blurOnSubmit={!multiline}
-          autoComplete="off"
-          {...(Platform.OS === 'android'
-            ? {
-                importantForAutofill: 'noExcludeDescendants' as const,
-              }
-            : {})}
+          {...nativeAutofill}
         />
 
         {isPassword ? (

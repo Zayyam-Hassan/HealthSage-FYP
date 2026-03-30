@@ -380,8 +380,9 @@ export default function PatientTreatmentScreen() {
               {patient?.full_name ?? 'Assigned patient'}
             </Text>
             <Text className="text-sm text-text-secondary">
-              {patient?.patient_id ?? 'Patient'}
-              {patient ? ` • ${patient.demographics.age} years` : ''}
+              {patient
+                ? `${patient.demographics.age} years · ${patient.gender}`
+                : ''}
             </Text>
           </Card>
 

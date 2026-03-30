@@ -1,13 +1,9 @@
 import mongoose, { Schema, type Document, type Model } from 'mongoose';
 
 export const uploadedReportCategories = [
-  'lab_report',
-  'prescription',
-  'imaging',
-  'discharge_summary',
-  'test_result',
-  'doctor_note',
-  'general_document',
+  'patient_sent',
+  'doctor_sent',
+  'system_generated',
 ] as const;
 
 export type UploadedReportCategory = (typeof uploadedReportCategories)[number];
