@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import Card from '@/components/Card';
+import AppDialog from '@/components/AppDialog';
 import EmptyState from '@/components/EmptyState';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import ReportCard from '@/components/Card/ReportCard';
@@ -17,12 +17,15 @@ import {
 import Avatar from '@/components/Avatar';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
+import { filterUpcomingBookedAppointments } from '@/utils/appointmentFilters';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 
 const TAB_BAR_HEIGHT = 62;
 
 export default function SavedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { dialog, hideDialog, showDialog } = useAppDialog();
   const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'appointments' | 'reports'>('appointments');
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -65,6 +68,11 @@ export default function SavedScreen() {
     }, [authLoading, loadRecords]),
   );
 
+  const visibleAppointments = useMemo(
+    () => filterUpcomingBookedAppointments(appointments as Appointment[]),
+    [appointments],
+  );
+
   if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
@@ -75,16 +83,25 @@ export default function SavedScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background">
+      <AppDialog
+        visible={dialog.visible}
+        title={dialog.title}
+        message={dialog.message}
+        actions={dialog.actions}
+        onClose={hideDialog}
+      />
       <View className="px-6 pt-6 pb-4">
-        <Card className="mb-5 bg-bg-secondary border-primary/12 shadow-sm">
-          <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-secondary mb-2">
-            Library
-          </Text>
-          <Text className="text-2xl font-bold text-text mb-1 tracking-tight">Records</Text>
-          <Text className="text-sm text-text-secondary leading-6">
-            Appointments and your report library in one place.
-          </Text>
-        </Card>
+        <View className="mb-5 overflow-hidden rounded-2xl border border-white/25 bg-coral shadow-sm">
+          <View className="px-5 pt-5 pb-4">
+            <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80 mb-2">
+              Library
+            </Text>
+            <Text className="text-2xl font-bold text-white mb-1 tracking-tight">Records</Text>
+            <Text className="text-sm text-white/90 leading-6">
+              Appointments and your report library in one place.
+            </Text>
+          </View>
+        </View>
         <View
           className="flex-row bg-bg-secondary rounded-2xl p-1 border border-border/80"
           accessibilityRole="tablist"
@@ -116,20 +133,9 @@ export default function SavedScreen() {
 
       {activeTab === 'appointments' ? (
         <View className="flex-1">
-          {/* Keep appointment design consistent for both doctor and patient */}
-          <View className="flex-row items-center justify-between px-4 py-3 bg-background border-b border-border/80">
-            <View className="w-11 h-11 items-center justify-center">
-              <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-            </View>
-            <Text className="flex-1 text-xl font-bold text-text tracking-tight" numberOfLines={1}>
-              Appointments
-            </Text>
-            <View className="w-11 h-11" />
-          </View>
-
-          {appointments.length > 0 ? (
+          {visibleAppointments.length > 0 ? (
             <FlatList
-              data={appointments}
+              data={visibleAppointments}
               keyExtractor={(item) => item.id}
               contentContainerStyle={{
                 paddingLeft: 24,
@@ -156,6 +162,7 @@ export default function SavedScreen() {
                 const timeValue = appointment.display_time || appointment.status || 'Time';
 
                 const canReject = appointment.status === 'booked';
+                const canPatientCancel = role === 'patient' && appointment.status === 'booked';
 
                 return (
                   <View className="mb-3 rounded-[18px] border border-coral-soft bg-white px-4 py-4">
@@ -203,37 +210,83 @@ export default function SavedScreen() {
                       </View>
                     </View>
 
-                    <View className="flex-row gap-3 mt-4">
-                      <TouchableOpacity
-                        className={`items-center rounded-2xl bg-success py-2 ${
-                          role === 'doctor' ? 'flex-1' : 'w-full'
-                        }`}
-                        activeOpacity={0.85}
-                        onPress={() => router.push(`/appointments/${appointment.id}` as any)}
-                      >
-                        <Text className="text-sm font-semibold text-white">View Details</Text>
-                      </TouchableOpacity>
-
+                    <View className="mt-4 flex-row gap-3">
                       {role === 'doctor' ? (
-                        <TouchableOpacity
-                          className={`flex-1 items-center rounded-2xl py-2 ${
-                            canReject ? 'bg-error' : 'bg-error/50'
-                          }`}
-                          activeOpacity={0.85}
-                          disabled={!canReject || actionLoadingId === appointment.id}
-                          onPress={async () => {
-                            try {
-                              setActionLoadingId(appointment.id);
-                              await appointmentsService.cancelDoctorAppointment(appointment.id);
-                              await loadRecords();
-                            } finally {
-                              setActionLoadingId(null);
-                            }
-                          }}
-                        >
-                          <Text className="text-sm font-semibold text-white">Reject Request</Text>
-                        </TouchableOpacity>
-                      ) : null}
+                        <>
+                          <TouchableOpacity
+                            className="flex-1 items-center rounded-2xl bg-success py-3"
+                            activeOpacity={0.85}
+                            onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                          >
+                            <Text className="text-sm font-semibold text-white">View Details</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            className={`flex-1 items-center rounded-2xl py-3 ${
+                              canReject ? 'bg-error' : 'bg-error/50'
+                            }`}
+                            activeOpacity={0.85}
+                            disabled={!canReject || actionLoadingId === appointment.id}
+                            onPress={async () => {
+                              try {
+                                setActionLoadingId(appointment.id);
+                                await appointmentsService.cancelDoctorAppointment(appointment.id);
+                                await loadRecords();
+                              } finally {
+                                setActionLoadingId(null);
+                              }
+                            }}
+                          >
+                            <Text className="text-sm font-semibold text-white">Reject Request</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            className="flex-1 items-center rounded-2xl bg-success py-3"
+                            activeOpacity={0.85}
+                            onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                          >
+                            <Text className="text-sm font-semibold text-white">View Details</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            className={`flex-1 items-center rounded-2xl py-3 ${
+                              canPatientCancel ? 'bg-error' : 'bg-error/40'
+                            }`}
+                            activeOpacity={0.85}
+                            disabled={!canPatientCancel || actionLoadingId === appointment.id}
+                            onPress={() => {
+                              if (!canPatientCancel) return;
+                              const id = appointment.id;
+                              showDialog(
+                                'Cancel this appointment?',
+                                'It will be removed from your upcoming list.',
+                                [
+                                  { label: 'Keep', onPress: () => {}, variant: 'secondary' },
+                                  {
+                                    label: 'Cancel appointment',
+                                    variant: 'danger',
+                                    onPress: () => {
+                                      void (async () => {
+                                        try {
+                                          setActionLoadingId(id);
+                                          await appointmentsService.cancelPatientAppointment(id);
+                                          await loadRecords();
+                                        } finally {
+                                          setActionLoadingId(null);
+                                        }
+                                      })();
+                                    },
+                                  },
+                                ],
+                              );
+                            }}
+                          >
+                            <Text className="text-sm font-semibold text-white">
+                              {actionLoadingId === appointment.id ? 'Cancelling…' : 'Cancel'}
+                            </Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
                     </View>
                   </View>
                 );
@@ -242,11 +295,11 @@ export default function SavedScreen() {
           ) : (
             <View style={{ paddingBottom: listBottomPadding }} className="px-6">
               <EmptyState
-                title="No appointments yet"
+                title="No upcoming appointments"
                 message={
                   role === 'patient'
-                    ? 'Your confirmed and completed appointments will appear here.'
-                    : 'Patient bookings will appear here.'
+                    ? 'When you book a visit, your upcoming appointments will show here.'
+                    : 'Upcoming patient visits that are still booked will appear here.'
                 }
               />
             </View>

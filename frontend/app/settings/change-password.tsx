@@ -15,9 +15,11 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Header from '@/components/Header';
 import { colors } from '@/constants/colors';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 
 export default function ChangePasswordScreen() {
   const router = useRouter();
+  const { role } = useAuth();
   const [loading, setLoading] = useState(false);
   const [passwords, setPasswords] = useState({
     currentPassword: '',
@@ -86,7 +88,11 @@ export default function ChangePasswordScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header title="Change Password" showBack />
+      <Header
+        variant="coral"
+        title="Change password"
+        showBack
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}

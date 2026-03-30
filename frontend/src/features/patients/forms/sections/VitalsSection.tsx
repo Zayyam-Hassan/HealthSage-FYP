@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import Card from '@/components/Card';
 import FormInput from '@/components/FormInput';
 import SectionHeader from '@/components/SectionHeader';
+import { bmiFromHeightWeight } from '../clinicalFormHandlers';
 import type { ClinicalFormHandlers } from '../clinicalFormHandlers';
 import type { PatientFormErrors, PatientFormValues } from '@/interfaces/patient';
 
@@ -23,6 +24,10 @@ export function VitalsSection({
   bmiLabelStyle = 'unicode',
 }: Props) {
   const bmiLabel = bmiLabelStyle === 'unicode' ? 'BMI (kg/m²)' : 'BMI (kg/m^2)';
+  const hStr = String(formData.height_cm ?? '');
+  const wStr = String(formData.weight_kg ?? '');
+  const bmiFromMetrics = bmiFromHeightWeight(hStr, wStr);
+  const bmiIsAuto = Boolean(bmiFromMetrics);
 
   return (
     <Card className={className}>
@@ -35,14 +40,27 @@ export function VitalsSection({
 
       <View className="flex-row flex-wrap gap-3">
         <View className="w-[48%]">
-          <FormInput
-            label={bmiLabel}
-            value={formData.vital_signs.bmi?.toString() || ''}
-            onChangeText={(text) => handlers.updateVital('bmi', text)}
-            placeholder="25.3"
-            type="number"
-            error={errors.vital_signs?.bmi}
-          />
+          {bmiIsAuto ? (
+            <View>
+              <Text className="mb-2 text-sm font-medium text-text">{bmiLabel}</Text>
+              <View className="rounded-2xl border border-border/80 bg-bg-secondary px-4 py-3">
+                <Text className="text-base font-semibold text-text">
+                  {formData.vital_signs.bmi?.toString() || bmiFromMetrics}
+                </Text>
+              </View>
+              <Text className="mt-1 text-xs text-text-secondary">From height and weight</Text>
+            </View>
+          ) : (
+            <FormInput
+              label={bmiLabel}
+              value={formData.vital_signs.bmi?.toString() || ''}
+              onChangeText={(text) => handlers.updateVital('bmi', text)}
+              placeholder="25.3"
+              type="number"
+              error={errors.vital_signs?.bmi}
+              helperText="Enter height and weight above to auto-calculate."
+            />
+          )}
         </View>
         <View className="w-[48%]">
           <FormInput

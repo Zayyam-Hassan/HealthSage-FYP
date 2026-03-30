@@ -16,6 +16,26 @@ import {
   type UploadedReport,
 } from '@/services/reports';
 
+function viewerParamsForUploaded(report: UploadedReport) {
+  return {
+    path: encodeURIComponent(report.file_url),
+    title: encodeURIComponent(report.title),
+    mime: report.mime_type,
+    reportId: report.id,
+    kind: 'uploaded',
+  };
+}
+
+function viewerParamsForGenerated(report: GeneratedReport) {
+  return {
+    path: encodeURIComponent(report.attachment_url!),
+    title: encodeURIComponent(report.title),
+    mime: 'application/pdf',
+    reportId: report.id,
+    kind: 'generated',
+  };
+}
+
 function ReportDetailHeader({ title, onBack }: { title: string; onBack: () => void }) {
   return (
     <View className="bg-coral px-4 pb-3 pt-2">
@@ -89,32 +109,31 @@ export default function ReportDetailsScreen() {
     })();
   }, [effectiveKind, id]);
 
-  const openUploadedInApp = (report: UploadedReport) => {
-    router.push({
-      pathname: '/reports/viewer',
-      params: {
-        path: encodeURIComponent(report.file_url),
-        title: encodeURIComponent(report.title),
-        mime: report.mime_type,
-        reportId: report.id,
-        kind: 'uploaded',
-      },
-    } as any);
-  };
+  const canOpenInViewer =
+    !loading &&
+    !authLoading &&
+    !error &&
+    Boolean(
+      (uploadedReport?.file_url && String(uploadedReport.file_url).trim()) ||
+        (generatedReport?.attachment_url && String(generatedReport.attachment_url).trim()),
+    );
 
-  const openGeneratedPdfInApp = (report: GeneratedReport) => {
-    if (!report.attachment_url) return;
-    router.push({
-      pathname: '/reports/viewer',
-      params: {
-        path: encodeURIComponent(report.attachment_url),
-        title: encodeURIComponent(report.title),
-        mime: 'application/pdf',
-        reportId: report.id,
-        kind: 'generated',
-      },
-    } as any);
-  };
+  useEffect(() => {
+    if (!canOpenInViewer) return;
+    if (uploadedReport?.file_url) {
+      router.replace({
+        pathname: '/reports/viewer',
+        params: viewerParamsForUploaded(uploadedReport),
+      } as any);
+      return;
+    }
+    if (generatedReport?.attachment_url) {
+      router.replace({
+        pathname: '/reports/viewer',
+        params: viewerParamsForGenerated(generatedReport),
+      } as any);
+    }
+  }, [canOpenInViewer, uploadedReport, generatedReport, router]);
 
   if (authLoading || loading) {
     return (
@@ -137,6 +156,15 @@ export default function ReportDetailsScreen() {
             Go Back
           </Button>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (canOpenInViewer) {
+    return (
+      <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
+        <ReportDetailHeader title="Report Details" onBack={() => router.back()} />
+        <CenteredScreenLoader />
       </SafeAreaView>
     );
   }
@@ -188,8 +216,6 @@ export default function ReportDetailsScreen() {
                   </Text>
                 </Card>
               ) : null}
-
-              <Button onPress={() => openUploadedInApp(uploadedReport)}>Open file in app</Button>
             </>
           ) : null}
 
@@ -233,12 +259,6 @@ export default function ReportDetailsScreen() {
                   </Card>
                 );
               })}
-
-              {generatedReport.attachment_url ? (
-                <Button onPress={() => openGeneratedPdfInApp(generatedReport)}>
-                  Open PDF in app
-                </Button>
-              ) : null}
             </>
           ) : null}
 

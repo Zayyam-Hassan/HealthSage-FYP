@@ -80,7 +80,11 @@ export default function AppointmentDetailsScreen() {
   if (authLoading || loading || !appointment) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <Header title="Appointment Details" showBack />
+        <Header
+          variant="coral"
+          title="Appointment details"
+          showBack
+        />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -91,7 +95,12 @@ export default function AppointmentDetailsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      <Header title="Appointment Details" showBack />
+      <Header
+        variant="coral"
+        title="Appointment details"
+        subtitle={counterpart?.trim() || undefined}
+        showBack
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 28 }}

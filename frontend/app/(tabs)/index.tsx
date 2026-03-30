@@ -24,6 +24,7 @@ import {
   type DoctorAssignmentRequest,
 } from '@/services/doctors';
 import { patientsService, type Patient } from '@/services/patients';
+import { filterUpcomingBookedAppointments } from '@/utils/appointmentFilters';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -34,39 +35,12 @@ type WorkspaceLink = {
   icon: IonIconName;
 };
 
-/** Same destinations + copy as `app/dashboard` — compact title + description cards (patient home). */
-type PatientDashboardLink = {
-  id: string;
-  title: string;
-  description: string;
-  route: string;
-};
-
-const patientDashboardLinks: PatientDashboardLink[] = [
-  {
-    id: 'assessment',
-    title: 'Health form',
-    description: 'Update glucose, HbA1c, vitals, and lifestyle details.',
-    route: '/assessment',
-  },
-  {
-    id: 'doctor',
-    title: 'Choose doctor',
-    description: 'Send a request to a doctor from the directory.',
-    route: '/psychiatrist',
-  },
-  {
-    id: 'reports',
-    title: 'Reports',
-    description: 'Review your saved medical reports.',
-    route: '/reports',
-  },
-  {
-    id: 'appointments',
-    title: 'Scheduling',
-    description: 'Browse available slots and book instantly.',
-    route: '/appointments',
-  },
+/** Patient home — same grid pattern as doctor workspace (icon tile + label). */
+const patientWorkspaceLinks: WorkspaceLink[] = [
+  { id: 'assessment', title: 'Health form', route: '/assessment', icon: 'clipboard-outline' },
+  { id: 'treatment', title: 'Treatment plan', route: '/doctor-treatment-plan', icon: 'medkit-outline' },
+  { id: 'doctor', title: 'Choose doctor', route: '/psychiatrist', icon: 'people-outline' },
+  { id: 'reports', title: 'Reports', route: '/reports', icon: 'document-text-outline' },
 ];
 
 /** Single strip of destinations — avoids repeating the same routes in multiple card grids */
@@ -158,7 +132,7 @@ export default function HomeScreen() {
     popularDoctors.length > 0 &&
     !myProfile?.assignment.doctor;
 
-  const upcomingPatientCount = appointments.filter((a) => a.status === 'booked').length;
+  const upcomingPatientCount = filterUpcomingBookedAppointments(appointments).length;
 
   if (authLoading || loading) {
     return (
@@ -194,12 +168,15 @@ export default function HomeScreen() {
             <View className="flex-row items-end justify-between">
               <View className="flex-1 min-w-0 pr-3">
                 <Text
-                  className="text-[11px] font-semibold uppercase tracking-[0.12em] text-coral-ink/50 mb-1"
+                  className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/75 mb-1"
                   accessibilityRole="text"
                 >
                   {userRole === 'doctor' ? 'Clinician workspace' : 'Your care'}
                 </Text>
-                <Text className="text-[26px] font-bold text-coral-ink leading-8 mb-2 tracking-tight">
+                <Text
+                  className="text-[26px] font-bold leading-8 mb-2 tracking-tight"
+                  style={{ color: colors.text.inverse }}
+                >
                   {userRole === 'doctor'
                     ? userDisplayName
                       ? `Hello, ${userDisplayName.split(/\s+/).filter(Boolean)[0] ?? userDisplayName}`
@@ -208,19 +185,22 @@ export default function HomeScreen() {
                       ? `Hi, ${userDisplayName.split(/\s+/).filter(Boolean)[0] ?? userDisplayName}`
                       : 'Hi there'}
                 </Text>
-                <Text className="text-sm text-coral-ink/80 leading-6 max-w-[300px]">
+                <Text className="text-sm text-white/90 leading-6 max-w-[300px]">
                   {userRole === 'doctor'
                     ? 'A calm overview of your panel, scheduling, and tools for today.'
                     : 'Your appointments, care team, and health tools—together in one place.'}
                 </Text>
                 <View className="mt-4 flex-row flex-wrap gap-2">
-                  <View className="rounded-full bg-white/30 px-3 py-1.5 border border-white/40">
-                    <Text className="text-[11px] font-semibold text-coral-ink">
+                  <View className="rounded-full bg-white/20 px-3 py-1.5 border border-white/35">
+                    <Text
+                      className="text-[11px] font-semibold"
+                      style={{ color: colors.text.inverse }}
+                    >
                       {userRole === 'doctor' ? 'Clinical focus' : 'Stay on track'}
                     </Text>
                   </View>
-                  <View className="rounded-full bg-white/20 px-3 py-1.5">
-                    <Text className="text-[11px] font-semibold text-coral-ink/90">
+                  <View className="rounded-full bg-white/15 px-3 py-1.5 border border-white/25">
+                    <Text className="text-[11px] font-semibold text-white/95">
                       {userRole === 'doctor' ? 'Secure · organized' : 'Supportive care'}
                     </Text>
                   </View>
@@ -233,20 +213,23 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
             </View>
-            <View className="mt-5 flex-row items-center justify-between rounded-2xl bg-white/25 border border-white/35 px-4 py-3">
+            <View className="mt-5 flex-row items-center justify-between rounded-2xl bg-white/20 border border-white/30 px-4 py-3">
               <View className="flex-row items-center flex-1 min-w-0 pr-3">
-                <View className="w-10 h-10 rounded-2xl bg-white/60 items-center justify-center mr-3">
+                <View className="w-10 h-10 rounded-2xl bg-white/35 items-center justify-center mr-3">
                   <Ionicons
                     name={userRole === 'doctor' ? 'medkit-outline' : 'heart-outline'}
                     size={22}
-                    color={colors.coral.ink}
+                    color={colors.text.inverse}
                   />
                 </View>
                 <View className="flex-1 min-w-0">
-                  <Text className="text-xs font-semibold uppercase tracking-wide text-coral-ink/70">
+                  <Text className="text-xs font-semibold uppercase tracking-wide text-white/80">
                     {userRole === 'doctor' ? 'Today' : 'Wellness'}
                   </Text>
-                  <Text className="text-sm font-semibold text-coral-ink leading-5" numberOfLines={2}>
+                  <Text
+                    className="text-sm font-semibold leading-5 text-white"
+                    numberOfLines={2}
+                  >
                     {userRole === 'doctor'
                       ? 'Review patients and upcoming visits from shortcuts below.'
                       : 'Book care, update your profile, and keep documents handy.'}
@@ -256,7 +239,7 @@ export default function HomeScreen() {
               <Image
                 source={images.healthsageLogo}
                 accessibilityIgnoresInvertColors
-                style={{ width: 96, height: 26 }}
+                style={{ width: 96, height: 26, opacity: 0.95 }}
                 resizeMode="contain"
               />
             </View>
@@ -264,58 +247,61 @@ export default function HomeScreen() {
         </View>
 
         <View className="px-6 pt-6">
-          <Card className="mb-6 bg-surface-soft border-coral-soft shadow-sm">
-            <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep mb-2">
-              {userRole === 'doctor' ? 'At a glance' : 'Care status'}
-            </Text>
-            {userRole === 'doctor' ? (
-              <View className="flex-row flex-wrap justify-between">
-                <View className="w-[48%] mb-0 bg-white rounded-[18px] p-4 border border-coral-soft">
-                  <Text className="text-3xl font-bold text-coral-ink">
-                    {myPatients.length}
-                  </Text>
-                  <Text className="text-sm text-text-secondary mt-1">Assigned patients</Text>
-                </View>
-                <View className="w-[48%] mb-0 bg-white rounded-[18px] p-4 border border-coral-soft">
-                  <Text className="text-3xl font-bold text-coral-ink">
-                    {requests.length}
-                  </Text>
-                  <Text className="text-sm text-text-secondary mt-1">Pending requests</Text>
-                </View>
-              </View>
-            ) : (
-              <View className="flex-row flex-wrap justify-between">
-                <View className="w-[48%] mb-0 bg-white rounded-[18px] p-4 border border-coral-soft">
-                  <Text className="text-[11px] font-semibold uppercase tracking-wide text-coral-deep mb-1">
-                    Care team
-                  </Text>
-                  <Text className="text-lg font-bold text-coral-ink leading-6" numberOfLines={2}>
-                    {myProfile?.assignment.doctor
-                      ? myProfile.assignment.doctor.name
-                      : myProfile?.assignment.pending_request
-                        ? 'Pending'
-                        : '—'}
-                  </Text>
-                  <Text className="text-sm text-text-secondary mt-1 leading-5" numberOfLines={3}>
-                    {myProfile?.assignment.doctor
-                      ? myProfile.assignment.doctor.specialization
-                      : myProfile?.assignment.pending_request
-                        ? 'Waiting for your doctor to confirm.'
-                        : 'No doctor linked yet.'}
-                  </Text>
-                </View>
-                <View className="w-[48%] mb-0 bg-white rounded-[18px] p-4 border border-coral-soft">
-                  <Text className="text-3xl font-bold text-coral-ink">
-                    {upcomingPatientCount}
-                  </Text>
-                  <Text className="text-sm text-text-secondary mt-1">Booked visits</Text>
-                  <Text className="text-xs text-text-tertiary mt-2 leading-4">
-                    Count of upcoming appointments on your schedule.
-                  </Text>
-                </View>
-              </View>
-            )}
-          </Card>
+          <View className="mb-6 overflow-hidden rounded-2xl border border-white/25 bg-coral shadow-sm">
+            <View className="px-5 pt-4 pb-3">
+              <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80">
+                {userRole === 'doctor' ? 'At a glance' : 'Care status'}
+              </Text>
+              <Text className="mt-1 text-sm text-white/90 leading-5">
+                {userRole === 'doctor'
+                  ? 'Panel load and assignment requests.'
+                  : 'Your care team and upcoming visits.'}
+              </Text>
+            </View>
+            <View className="flex-row flex-wrap justify-between px-4 pb-4">
+              {userRole === 'doctor' ? (
+                <>
+                  <View className="w-[48%] mb-0 rounded-[18px] border border-white/35 bg-white p-4">
+                    <Text className="text-3xl font-bold text-coral-ink">{myPatients.length}</Text>
+                    <Text className="mt-1 text-sm text-text-secondary">Assigned patients</Text>
+                  </View>
+                  <View className="w-[48%] mb-0 rounded-[18px] border border-white/35 bg-white p-4">
+                    <Text className="text-3xl font-bold text-coral-ink">{requests.length}</Text>
+                    <Text className="mt-1 text-sm text-text-secondary">Pending requests</Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View className="w-[48%] mb-0 rounded-[18px] border border-white/35 bg-white p-4">
+                    <Text className="text-[11px] font-semibold uppercase tracking-wide text-coral-deep mb-1">
+                      Care team
+                    </Text>
+                    <Text className="text-lg font-bold text-coral-ink leading-6" numberOfLines={2}>
+                      {myProfile?.assignment.doctor
+                        ? myProfile.assignment.doctor.name
+                        : myProfile?.assignment.pending_request
+                          ? 'Pending'
+                          : '—'}
+                    </Text>
+                    <Text className="mt-1 text-sm text-text-secondary leading-5" numberOfLines={3}>
+                      {myProfile?.assignment.doctor
+                        ? myProfile.assignment.doctor.specialization
+                        : myProfile?.assignment.pending_request
+                          ? 'Waiting for your doctor to confirm.'
+                          : 'No doctor linked yet.'}
+                    </Text>
+                  </View>
+                  <View className="w-[48%] mb-0 rounded-[18px] border border-white/35 bg-white p-4">
+                    <Text className="text-3xl font-bold text-coral-ink">{upcomingPatientCount}</Text>
+                    <Text className="mt-1 text-sm text-text-secondary">Booked visits</Text>
+                    <Text className="mt-2 text-xs text-text-tertiary leading-4">
+                      Upcoming appointments on your schedule.
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
 
           {userRole === 'doctor' ? (
             <View className="mb-6">
@@ -350,25 +336,27 @@ export default function HomeScreen() {
               <Text className="text-lg font-semibold text-text mb-1">Your workspace</Text>
               <Text className="text-sm text-text-secondary mb-3 leading-5">
                 {patientDiscoveryCarouselVisible
-                  ? 'Shortcuts match the patient dashboard—use the discovery strip below to pick a clinician.'
-                  : 'Same layout as the doctor dashboard: tap a card to open health tools, scheduling, and more.'}
+                  ? 'Use the shortcuts below, then pick a clinician from the discovery strip.'
+                  : 'Same layout as the clinical workspace: tap a tile for health tools and reports.'}
               </Text>
               <View className="flex-row flex-wrap justify-between">
-                {patientDashboardLinks.map((item) => (
+                {patientWorkspaceLinks.map((link) => (
                   <TouchableOpacity
-                    key={item.id}
-                    onPress={() => router.push(item.route as any)}
-                    className="w-[48%] mb-4"
-                    activeOpacity={0.8}
+                    key={link.id}
+                    activeOpacity={0.88}
+                    onPress={() => router.push(link.route as any)}
                     accessibilityRole="button"
-                    accessibilityLabel={`${item.title}. ${item.description}`}
+                    accessibilityLabel={link.title}
+                    className="w-[48%] mb-3"
                   >
-                    <Card className="min-h-[152px] border-coral-soft bg-surface-soft flex flex-col justify-between">
-                      <Text className="text-base font-semibold text-text tracking-tight">
-                        {item.title}
+                    <View className="rounded-[18px] bg-surface-soft border border-coral-soft px-3 py-3.5 items-center shadow-sm">
+                      <View className="w-11 h-11 rounded-[14px] bg-coral-muted items-center justify-center mb-2">
+                        <Ionicons name={link.icon} size={22} color={colors.coral.ink} />
+                      </View>
+                      <Text className="text-[11px] font-semibold text-text text-center leading-4">
+                        {link.title}
                       </Text>
-                      <Text className="text-sm text-text-secondary leading-5">{item.description}</Text>
-                    </Card>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>

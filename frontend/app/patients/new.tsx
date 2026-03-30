@@ -51,7 +51,7 @@ export default function NewPatientScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      <Header title="Add New Patient" showBack />
+      <Header variant="coral" title="Add New Patient" showBack />
       <ScrollView
         contentContainerStyle={{ paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}

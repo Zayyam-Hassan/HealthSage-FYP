@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import AppDialog from '@/components/AppDialog';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
-import Header from '@/components/Header';
+import MedicalReportHeader from '@/components/MedicalReportHeader';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { formatApiError } from '@/src/shared/utils/formatApiError';
 import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
@@ -13,7 +13,10 @@ import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { patientsService } from '@/services/patients';
 import type { PatientFormErrors, PatientFormValues } from '@/interfaces/patient';
 import { hasValidationErrors, validatePatientForm } from '@/utils/patientValidation';
-import { createClinicalFormHandlers } from '@/src/features/patients/forms/clinicalFormHandlers';
+import {
+  bmiFromHeightWeight,
+  createClinicalFormHandlers,
+} from '@/src/features/patients/forms/clinicalFormHandlers';
 import { DemographicsSection } from '@/src/features/patients/forms/sections/DemographicsSection';
 import { LabTestsSection } from '@/src/features/patients/forms/sections/LabTestsSection';
 import { VitalsSection } from '@/src/features/patients/forms/sections/VitalsSection';
@@ -70,12 +73,18 @@ export default function AssessmentScreen() {
         }
 
         const patient = await patientsService.getMyPatientProfile();
+        const hStr = patient.height_cm ? String(patient.height_cm) : '';
+        const wStr = patient.weight_kg ? String(patient.weight_kg) : '';
+        const autoBmi = bmiFromHeightWeight(hStr, wStr);
+        const bmiStr =
+          autoBmi ||
+          (patient.vital_signs?.bmi != null ? String(patient.vital_signs.bmi) : '');
         setFormData({
           patient_id: patient.patient_id,
           age: patient.demographics.age ? String(patient.demographics.age) : '',
           gender: patient.demographics.gender,
-          height_cm: patient.height_cm ? String(patient.height_cm) : '',
-          weight_kg: patient.weight_kg ? String(patient.weight_kg) : '',
+          height_cm: hStr,
+          weight_kg: wStr,
           lab_tests: {
             hba1c: patient.lab_tests?.hba1c ? String(patient.lab_tests.hba1c) : '',
             fasting_glucose: patient.lab_tests?.fasting_glucose
@@ -92,7 +101,7 @@ export default function AssessmentScreen() {
             creatinine: patient.lab_tests?.creatinine ? String(patient.lab_tests.creatinine) : '',
           },
           vital_signs: {
-            bmi: patient.vital_signs?.bmi ? String(patient.vital_signs.bmi) : '',
+            bmi: bmiStr,
             systolic_bp: patient.vital_signs?.systolic_bp ? String(patient.vital_signs.systolic_bp) : '',
             diastolic_bp: patient.vital_signs?.diastolic_bp ? String(patient.vital_signs.diastolic_bp) : '',
           },
@@ -142,7 +151,7 @@ export default function AssessmentScreen() {
   if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title="Health Assessment" showBack />
+        <MedicalReportHeader title="Health Assessment" onBack={() => router.back()} />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -151,7 +160,7 @@ export default function AssessmentScreen() {
   if (userRole !== 'patient') {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title="Health Assessment" showBack />
+        <MedicalReportHeader title="Health Assessment" onBack={() => router.back()} />
         <View className="flex-1 justify-center px-6">
           <Card>
             <Text className="text-lg font-semibold text-text mb-2">Patient-only screen</Text>
@@ -176,25 +185,29 @@ export default function AssessmentScreen() {
         actions={dialog.actions}
         onClose={hideDialog}
       />
-      <Header title="Health Assessment" showBack />
+      <MedicalReportHeader title="Health Assessment" onBack={() => router.back()} />
       <ScrollView
         contentContainerStyle={{ paddingBottom: 28 }}
         showsVerticalScrollIndicator={false}
       >
         <View className="px-6 pt-6">
-          <Card className="mb-6 bg-bg-secondary border-primary/12 shadow-sm">
-            <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-secondary mb-2">
-              Step {progressLabel}
-            </Text>
-            <Text className="text-2xl font-bold text-text mb-2 tracking-tight">{steps[stepIndex].title}</Text>
-            <Text className="text-sm text-text-secondary leading-6">{steps[stepIndex].description}</Text>
-            <View className="mt-5 h-2 rounded-full bg-white/80 border border-border/40 overflow-hidden">
-              <View
-                className="h-full bg-primary rounded-full"
-                style={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }}
-              />
+          <View className="mb-6 overflow-hidden rounded-2xl border border-white/25 bg-coral shadow-sm">
+            <View className="px-5 pt-5 pb-4">
+              <Text className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80">
+                Step {progressLabel}
+              </Text>
+              <Text className="mb-2 text-2xl font-bold tracking-tight text-white">
+                {steps[stepIndex].title}
+              </Text>
+              <Text className="text-sm leading-6 text-white/90">{steps[stepIndex].description}</Text>
+              <View className="mt-5 h-2 overflow-hidden rounded-full bg-white/25">
+                <View
+                  className="h-full rounded-full bg-white"
+                  style={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }}
+                />
+              </View>
             </View>
-          </Card>
+          </View>
 
           {stepIndex === 0 && (
             <DemographicsSection

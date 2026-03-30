@@ -81,7 +81,11 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      <Header title="Dashboard" showBack />
+      <Header
+        variant="coral"
+        title="Dashboard"
+        showBack
+      />
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}

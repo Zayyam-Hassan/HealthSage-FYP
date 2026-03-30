@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '@/components/Header';
 import Card from '@/components/Card';
 import { colors } from '@/constants/colors';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 
 type IonIcon = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -18,6 +19,7 @@ interface NotificationItem {
 }
 
 export default function NotificationsScreen() {
+  const { role } = useAuth();
   const [notifications, setNotifications] = useState<NotificationItem[]>([
     {
       id: '1',
@@ -94,7 +96,11 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header title="Notifications" showBack />
+      <Header
+        variant="coral"
+        title="Notifications"
+        showBack
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 20 }}

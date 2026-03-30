@@ -4,6 +4,16 @@ import type { PatientFormErrors, PatientFormValues } from '@/interfaces/patient'
 type SetForm = Dispatch<SetStateAction<PatientFormValues>>;
 type SetErr = Dispatch<SetStateAction<PatientFormErrors>>;
 
+/** Exported for vitals UI and initial form hydration. */
+export function bmiFromHeightWeight(heightCm: string | undefined, weightKg: string | undefined): string {
+  const h = parseFloat(String(heightCm ?? '').replace(',', '.'));
+  const w = parseFloat(String(weightKg ?? '').replace(',', '.'));
+  if (!Number.isFinite(h) || !Number.isFinite(w) || h <= 0 || w <= 0) return '';
+  const bmi = w / (h / 100) ** 2;
+  if (!Number.isFinite(bmi)) return '';
+  return bmi.toFixed(1);
+}
+
 /**
  * Shared updaters for clinical profile forms — keeps field names and nested shapes aligned with PatientFormValues.
  */
@@ -24,11 +34,37 @@ export function createClinicalFormHandlers(setFormData: SetForm, setErrors: SetE
   };
 
   const updateHeightCm = (text: string) => {
-    setFormData((f) => ({ ...f, height_cm: text }));
+    setFormData((f) => {
+      const next = { ...f, height_cm: text };
+      const auto = bmiFromHeightWeight(
+        next.height_cm != null ? String(next.height_cm) : '',
+        next.weight_kg != null ? String(next.weight_kg) : '',
+      );
+      return {
+        ...next,
+        vital_signs: {
+          ...next.vital_signs,
+          ...(auto ? { bmi: auto } : {}),
+        },
+      };
+    });
   };
 
   const updateWeightKg = (text: string) => {
-    setFormData((f) => ({ ...f, weight_kg: text }));
+    setFormData((f) => {
+      const next = { ...f, weight_kg: text };
+      const auto = bmiFromHeightWeight(
+        next.height_cm != null ? String(next.height_cm) : '',
+        next.weight_kg != null ? String(next.weight_kg) : '',
+      );
+      return {
+        ...next,
+        vital_signs: {
+          ...next.vital_signs,
+          ...(auto ? { bmi: auto } : {}),
+        },
+      };
+    });
   };
 
   const updateLab = (key: keyof NonNullable<PatientFormValues['lab_tests']>, value: string) => {

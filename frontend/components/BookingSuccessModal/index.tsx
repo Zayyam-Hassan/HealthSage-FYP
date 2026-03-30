@@ -11,7 +11,6 @@ interface BookingSuccessModalProps {
   /** e.g. Confirmed / booked — shown after API success */
   statusLabel?: string;
   onDone: () => void;
-  onEditAppointment?: () => void;
 }
 
 export default function BookingSuccessModal({
@@ -21,7 +20,6 @@ export default function BookingSuccessModal({
   timeLine,
   statusLabel = 'Confirmed',
   onDone,
-  onEditAppointment,
 }: BookingSuccessModalProps) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDone}>
@@ -48,16 +46,11 @@ export default function BookingSuccessModal({
           </Text>
           <TouchableOpacity
             onPress={onDone}
-            className="mb-4 w-full items-center rounded-2xl bg-coral-deep py-4 active:opacity-90"
+            className="w-full items-center rounded-2xl bg-coral-deep py-4 active:opacity-90"
             activeOpacity={0.85}
           >
             <Text className="text-base font-bold text-white">Done</Text>
           </TouchableOpacity>
-          {onEditAppointment ? (
-            <TouchableOpacity onPress={onEditAppointment} className="items-center py-2">
-              <Text className="text-sm font-semibold text-coral-deep">Edit your appointment</Text>
-            </TouchableOpacity>
-          ) : null}
         </View>
       </View>
     </Modal>

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AppDialog from '@/components/AppDialog';
@@ -116,6 +117,7 @@ export default function PatientWhatIfScreen() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const { dialog, hideDialog, showDialog } = useAppDialog();
+  const [activeSection, setActiveSection] = useState<'overview' | 'scenario' | 'results'>('overview');
 
   useEffect(() => {
     if (authLoading) return;
@@ -218,6 +220,7 @@ export default function PatientWhatIfScreen() {
         modifications,
       });
       setResult(response);
+      setActiveSection('results');
       setHistory((current) => [
         {
           id: `${Date.now()}`,
@@ -236,7 +239,11 @@ export default function PatientWhatIfScreen() {
   if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <Header title="What-If Analysis" showBack />
+        <Header
+          variant="coral"
+          title="What-if analysis"
+          showBack
+        />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -268,122 +275,197 @@ export default function PatientWhatIfScreen() {
         message={dialog.message}
         onClose={hideDialog}
       />
-      <Header title="What-If Analysis" showBack />
-      <ScrollView contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
-        <View className="px-6 pt-4">
-          <Card className="mb-5 bg-primary/5 border border-primary/20">
-            <Text className="text-2xl font-bold text-text mb-2">
-              {patient?.full_name || baseline?.patient_name || 'Patient'} scenario workspace
-            </Text>
-            <Text className="text-sm text-text-secondary leading-6">
-              Modify model-linked features, rerun the real GraphSAGE risk pipeline, and review the baseline-versus-scenario change before discussing it in the chatbot.
-            </Text>
-          </Card>
+      <Header
+        variant="coral"
+        title="What-if analysis"
+        subtitle={patient?.full_name?.trim() || baseline?.patient_name?.trim() || undefined}
+        showBack
+      />
+      <View className="flex-1 px-6">
+        <View className="pt-4 pb-3 flex-row rounded-full border border-coral-soft bg-white p-1 shadow-sm shadow-black/5">
+          {(['overview', 'scenario', 'results'] as const).map((key) => {
+            const disabled = key === 'results' && !result;
+            const label =
+              key === 'overview' ? 'Overview' : key === 'scenario' ? 'Scenario' : 'Results';
+            const active = activeSection === key;
+            return (
+              <Pressable
+                key={key}
+                disabled={disabled}
+                onPress={() => !disabled && setActiveSection(key)}
+                className={`flex-1 rounded-full py-2.5 px-2 ${active ? 'bg-coral-soft' : ''} ${disabled ? 'opacity-40' : ''}`}
+                accessibilityRole="button"
+                accessibilityState={{ disabled, selected: active }}
+                accessibilityLabel={label}
+              >
+                <Text
+                  className={`text-center text-xs font-semibold ${active ? 'text-coral-ink' : 'text-text-secondary'}`}
+                  numberOfLines={1}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
-          {baselineRisk ? (
-            <Card className="mb-5">
-              <SectionHeader title="Baseline Risk" />
-              <View className="flex-row items-center justify-between mb-4">
-                <View>
-                  <Text className="text-4xl font-bold text-text">{formatPercent(baselineRisk.risk_score)}</Text>
-                  <Text className="text-sm text-text-secondary mt-1">
-                    Current recalculated model risk for this patient
-                  </Text>
-                </View>
-                <Badge variant={riskVariant(baselineRisk.risk_label)} size="md">
-                  {baselineRisk.risk_label.toUpperCase()}
-                </Badge>
-              </View>
-              <View className="flex-row flex-wrap">
-                {baseline.modifiable_fields.slice(0, 6).map((field) => (
-                  <View
-                    key={field.field}
-                    className="mr-2 mb-2 px-3 py-2 rounded-xl bg-bg-secondary border border-border"
-                  >
-                    <Text className="text-xs uppercase tracking-[0.8px] text-text-secondary">
-                      {field.label}
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingBottom: 28, paddingTop: 4 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {activeSection === 'overview' ? (
+            <View className="w-full max-w-full">
+              <Card className="mb-5 overflow-hidden rounded-2xl border border-white/25 bg-coral shadow-sm">
+                <View className="w-full flex-row items-start gap-3">
+                  <View className="h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/30 bg-white/25">
+                    <Ionicons name="git-compare-outline" size={24} color="#FFFFFF" />
+                  </View>
+                  <View className="flex-1 min-w-0">
+                    <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/90 mb-1">
+                      Scenario workspace
                     </Text>
-                    <Text className="text-sm font-semibold text-text mt-1">
-                      {formatFieldValue(field.baseline_value, field.unit)}
+                    <Text
+                      className="text-xl font-bold text-white mb-2 w-full leading-7"
+                      style={{ flexShrink: 1 }}
+                    >
+                      {patient?.full_name || baseline?.patient_name || 'Patient'}
+                    </Text>
+                    <Text
+                      className="text-sm text-white/90 leading-6 w-full"
+                      style={{ flexShrink: 1 }}
+                    >
+                      Modify model-linked features, rerun the real GraphSAGE risk pipeline, and review the
+                      baseline-versus-scenario change before discussing it in the chatbot.
                     </Text>
                   </View>
-                ))}
+                </View>
+              </Card>
+
+              {baselineRisk ? (
+                <Card className="mb-5 overflow-hidden">
+                  <SectionHeader title="Baseline Risk" />
+                  <View className="flex-row items-start justify-between mb-4 gap-3 w-full">
+                    <View className="flex-1 min-w-0">
+                      <Text className="text-4xl font-bold text-text" numberOfLines={1}>
+                        {formatPercent(baselineRisk.risk_score)}
+                      </Text>
+                      <Text className="text-sm text-text-secondary mt-1" numberOfLines={3}>
+                        Current recalculated model risk for this patient
+                      </Text>
+                    </View>
+                    <View className="shrink-0 pt-0.5 max-w-[42%]">
+                      <Badge variant={riskVariant(baselineRisk.risk_label)} size="md">
+                        {baselineRisk.risk_label.toUpperCase()}
+                      </Badge>
+                    </View>
+                  </View>
+                  <View className="flex-row flex-wrap gap-2 w-full">
+                    {baseline.modifiable_fields.slice(0, 6).map((field) => (
+                      <View
+                        key={field.field}
+                        className="px-3 py-2 rounded-xl bg-bg-secondary border border-border"
+                        style={{ width: '47.5%', maxWidth: '100%' }}
+                      >
+                        <Text
+                          className="text-xs uppercase tracking-[0.8px] text-text-secondary"
+                          numberOfLines={2}
+                        >
+                          {field.label}
+                        </Text>
+                        <Text className="text-sm font-semibold text-text mt-1" numberOfLines={2}>
+                          {formatFieldValue(field.baseline_value, field.unit)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </Card>
+              ) : null}
+            </View>
+          ) : null}
+
+          {activeSection === 'scenario' ? (
+            <Card className="mb-5 overflow-hidden">
+              <SectionHeader title="Scenario Setup" />
+              <Input
+                label="Scenario name"
+                placeholder="Improved glycemic control"
+                value={scenarioName}
+                onChangeText={setScenarioName}
+                helperText="Optional label for the comparison card and chatbot handoff."
+              />
+
+              {baseline?.modifiable_fields.map((field) => (
+                <View key={field.field} className="mb-2">
+                  <Input
+                    label={field.unit ? `${field.label} (${field.unit})` : field.label}
+                    placeholder={valueToString(field.baseline_value) || 'Enter scenario value'}
+                    value={values[field.field] ?? ''}
+                    onChangeText={(text) =>
+                      setValues((current) => ({
+                        ...current,
+                        [field.field]: text,
+                      }))
+                    }
+                    type={field.input_type === 'number' ? 'number' : 'text'}
+                    error={fieldErrors[field.field]}
+                    helperText={`Current patient metric: ${formatFieldValue(field.baseline_value, field.unit)}`}
+                  />
+                </View>
+              ))}
+
+              <View className="flex-row items-start justify-between mb-4 gap-3 w-full">
+                <Text className="text-sm text-text-secondary flex-1 min-w-0" numberOfLines={3}>
+                  {changedCount} feature{changedCount === 1 ? '' : 's'} changed from current patient metrics
+                </Text>
+                <Text
+                  className="text-xs uppercase tracking-[0.8px] text-text-secondary shrink-0"
+                  numberOfLines={2}
+                >
+                  Simulation only
+                </Text>
               </View>
+
+              <Button onPress={runScenario} loading={running} fullWidth className="mb-3">
+                Run What-If Analysis
+              </Button>
+              <Button variant="outline" onPress={resetToBaseline} fullWidth>
+                Reset to Patient Metrics
+              </Button>
             </Card>
           ) : null}
 
-          <Card className="mb-5">
-            <SectionHeader title="Scenario Setup" />
-            <Input
-              label="Scenario name"
-              placeholder="Improved glycemic control"
-              value={scenarioName}
-              onChangeText={setScenarioName}
-              helperText="Optional label for the comparison card and chatbot handoff."
-            />
-
-            {baseline?.modifiable_fields.map((field) => (
-              <View key={field.field} className="mb-2">
-                <Input
-                  label={field.unit ? `${field.label} (${field.unit})` : field.label}
-                  placeholder={valueToString(field.baseline_value) || 'Enter scenario value'}
-                  value={values[field.field] ?? ''}
-                  onChangeText={(text) =>
-                    setValues((current) => ({
-                      ...current,
-                      [field.field]: text,
-                    }))
-                  }
-                  type={field.input_type === 'number' ? 'number' : 'text'}
-                  error={fieldErrors[field.field]}
-                  helperText={`Current patient metric: ${formatFieldValue(field.baseline_value, field.unit)}`}
-                />
-              </View>
-            ))}
-
-            <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-sm text-text-secondary">
-                {changedCount} feature{changedCount === 1 ? '' : 's'} changed from current patient metrics
-              </Text>
-              <Text className="text-xs uppercase tracking-[0.8px] text-text-secondary">
-                Simulation only
-              </Text>
-            </View>
-
-            <Button onPress={runScenario} loading={running} fullWidth className="mb-3">
-              Run What-If Analysis
-            </Button>
-            <Button variant="outline" onPress={resetToBaseline} fullWidth>
-              Reset to Patient Metrics
-            </Button>
-          </Card>
-
-          {result ? (
-            <>
-              <Card className="mb-5">
+          {activeSection === 'results' && result ? (
+            <View>
+              <Card className="mb-5 overflow-hidden">
                 <SectionHeader title="Comparison" />
-                <View className="flex-row items-start justify-between mb-4">
-                  <View className="flex-1 mr-3">
+                <View className="flex-row items-start justify-between mb-4 gap-3 w-full">
+                  <View className="flex-1 min-w-0 mr-0">
                     <Text className="text-xs uppercase tracking-[0.8px] text-text-secondary mb-1">
                       Baseline
                     </Text>
-                    <Text className="text-3xl font-bold text-text mb-2">
+                    <Text className="text-3xl font-bold text-text mb-2" numberOfLines={1}>
                       {formatPercent(result.baseline.risk_score)}
                     </Text>
-                    <Badge variant={riskVariant(result.baseline.risk_label)} size="sm">
-                      {result.baseline.risk_label.toUpperCase()}
-                    </Badge>
+                    <View className="self-start max-w-full">
+                      <Badge variant={riskVariant(result.baseline.risk_label)} size="sm">
+                        {result.baseline.risk_label.toUpperCase()}
+                      </Badge>
+                    </View>
                   </View>
-                  <View className="flex-1">
+                  <View className="flex-1 min-w-0">
                     <Text className="text-xs uppercase tracking-[0.8px] text-text-secondary mb-1">
                       Scenario
                     </Text>
-                    <Text className="text-3xl font-bold text-text mb-2">
+                    <Text className="text-3xl font-bold text-text mb-2" numberOfLines={1}>
                       {formatPercent(result.scenario.risk_score)}
                     </Text>
-                    <Badge variant={riskVariant(result.scenario.risk_label)} size="sm">
-                      {result.scenario.risk_label.toUpperCase()}
-                    </Badge>
+                    <View className="self-start max-w-full">
+                      <Badge variant={riskVariant(result.scenario.risk_label)} size="sm">
+                        {result.scenario.risk_label.toUpperCase()}
+                      </Badge>
+                    </View>
                   </View>
                 </View>
                 <View className="px-4 py-3 rounded-2xl bg-bg-secondary border border-border">
@@ -459,7 +541,10 @@ export default function PatientWhatIfScreen() {
                     <TouchableOpacity
                       key={entry.id}
                       activeOpacity={0.85}
-                      onPress={() => setResult(entry.scenario)}
+                      onPress={() => {
+                        setResult(entry.scenario);
+                        setActiveSection('results');
+                      }}
                       className="py-3 border-b border-border last:border-b-0"
                     >
                       <View className="flex-row items-center justify-between mb-1">
@@ -499,10 +584,10 @@ export default function PatientWhatIfScreen() {
               >
                 Continue in Chatbot
               </Button>
-            </>
+            </View>
           ) : null}
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }

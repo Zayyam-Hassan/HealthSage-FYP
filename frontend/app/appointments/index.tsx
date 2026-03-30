@@ -29,12 +29,11 @@ import {
   type SchedulingWeekday,
 } from '@/services/appointments';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
-import { doctorsService, type Doctor } from '@/services/doctors';
-import { patientsService } from '@/services/patients';
 import { colors } from '@/constants/colors';
 import { formatApiError } from '@/src/shared/utils/formatApiError';
 import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
+import { filterUpcomingBookedAppointments } from '@/utils/appointmentFilters';
 import AppointmentMonthCalendar from './AppointmentMonthCalendar';
 
 const weekdays: { label: string; value: SchedulingWeekday }[] = [
@@ -172,8 +171,6 @@ export default function AppointmentsScreen() {
   const [doctorSlots, setDoctorSlots] = useState<AppointmentSlot[]>([]);
   const [doctorAppointments, setDoctorAppointments] = useState<Appointment[]>([]);
 
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [assignedDoctorId, setAssignedDoctorId] = useState('');
   const [patientAppointments, setPatientAppointments] = useState<Appointment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [timePicker, setTimePicker] = useState<{
@@ -233,14 +230,7 @@ export default function AppointmentsScreen() {
   }, []);
 
   const loadPatientData = useCallback(async () => {
-    const [doctorsRes, profile, appointmentsRes] = await Promise.all([
-      doctorsService.getDoctors({ limit: 50 }),
-      patientsService.getMyPatientProfile().catch(() => null),
-      appointmentsService.getPatientAppointments({ limit: 50 }),
-    ]);
-
-    setDoctors(doctorsRes.items);
-    setAssignedDoctorId(profile?.assignment.doctor?.id || '');
+    const appointmentsRes = await appointmentsService.getPatientAppointments({ limit: 50 });
     setPatientAppointments(appointmentsRes.items);
   }, []);
 
@@ -258,7 +248,6 @@ export default function AppointmentsScreen() {
         setAvailability([]);
         setDoctorSlots([]);
         setDoctorAppointments([]);
-        setDoctors([]);
         setPatientAppointments([]);
       }
     } catch (err: any) {
@@ -281,9 +270,18 @@ export default function AppointmentsScreen() {
 
   useEffect(() => {
     if (role === 'patient' && params.doctor_id) {
-      router.replace(`/appointments/doctor/${params.doctor_id}` as never);
+      router.replace({
+        pathname: '/appointments/confirm-booking',
+        params: { doctorId: params.doctor_id },
+      } as never);
     }
   }, [role, params.doctor_id, router]);
+
+  const visiblePatientAppointments = useMemo(
+    () =>
+      role === 'patient' ? filterUpcomingBookedAppointments(patientAppointments) : [],
+    [role, patientAppointments],
+  );
 
   const activePickerValue = timePicker.field
     ? availabilityForm[timePicker.field] || ''
@@ -345,7 +343,7 @@ export default function AppointmentsScreen() {
         }
       }
 
-      await appointmentsService.generateDoctorSlots();
+      await appointmentsService.generateDoctorSlots({ days_ahead: 14 });
       resetAvailabilityForm();
       await loadDoctorData();
     } catch (err: any) {
@@ -358,7 +356,7 @@ export default function AppointmentsScreen() {
   const generateSlots = async () => {
     try {
       setSubmitting(true);
-      const response = await appointmentsService.generateDoctorSlots();
+      const response = await appointmentsService.generateDoctorSlots({ days_ahead: 14 });
       await loadDoctorData();
       showDialog(
         'Slots generated',
@@ -533,7 +531,11 @@ export default function AppointmentsScreen() {
   if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title={role === 'patient' ? 'Book appointment' : 'Scheduling'} showBack />
+        <Header
+          variant="coral"
+          title={role === 'patient' ? 'Book appointment' : 'Scheduling'}
+          showBack
+        />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -613,7 +615,11 @@ export default function AppointmentsScreen() {
           </View>
         </View>
       </Modal>
-      <Header title={role === 'patient' ? 'Book appointment' : 'Scheduling'} showBack />
+      <Header
+        variant="coral"
+        title={role === 'patient' ? 'Book appointment' : 'Scheduling'}
+        showBack
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -993,86 +999,30 @@ export default function AppointmentsScreen() {
             <>
               <Card className="mb-4 bg-surface-soft border-coral-soft shadow-sm">
                 <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep mb-1">
-                  Patient
+                  Book a visit
                 </Text>
-                <Text className="mb-1 text-lg font-semibold text-text leading-6">Book a visit</Text>
-                <Text className="text-sm leading-6 text-text-secondary">
-                  Choose a doctor, select a time, then confirm — same booking flow as before, step by step.
+                <Text className="mb-3 text-sm leading-6 text-text-secondary">
+                  Choose a doctor from the directory, then pick a time — one place for booking.
                 </Text>
-              </Card>
-
-              <View className="mb-4 flex-row justify-between rounded-[20px] border border-coral-soft bg-white px-3 py-4">
-                {(['Doctor', 'Time', 'Confirm'] as const).map((label, index) => (
-                  <View key={label} className="flex-1 items-center px-1">
-                    <View className="mb-2 h-9 w-9 items-center justify-center rounded-full bg-coral-soft">
-                      <Text className="text-sm font-bold text-coral-ink">{index + 1}</Text>
-                    </View>
-                    <Text className="text-center text-[11px] font-semibold text-text-secondary leading-4">
-                      {label}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
-              <Card className="mb-4 border-coral-soft bg-white">
-                <Text className="mb-1 text-base font-semibold text-text">
-                  Select doctor
-                </Text>
-                <Text className="mb-3 text-sm text-text-secondary leading-5">
-                  Open a profile to book. Your care team is highlighted below.
-                </Text>
-                {doctors.length === 0 ? (
-                  <Text className="text-sm text-text-secondary">
-                    No doctors are available right now.
-                  </Text>
-                ) : (
-                  <View>
-                    {doctors.map((doctor) => (
-                      <TouchableOpacity
-                        key={doctor.id}
-                        onPress={() =>
-                          router.push(`/appointments/doctor/${doctor.id}` as never)
-                        }
-                        activeOpacity={0.88}
-                        className="mb-3 last:mb-0"
-                      >
-                        <View className="overflow-hidden rounded-[18px] border border-coral-soft bg-surface-soft pl-0 flex-row">
-                          <View className="w-1.5 bg-coral self-stretch" />
-                          <View className="flex-1 flex-row items-center justify-between py-3 pr-3 pl-3">
-                            <View className="flex-1">
-                              <Text className="text-base font-semibold text-text">{doctor.name}</Text>
-                              <Text className="text-sm text-text-secondary mt-0.5">
-                                {doctor.specialization}
-                              </Text>
-                            </View>
-                            {assignedDoctorId === doctor.id ? (
-                              <View className="rounded-full bg-coral-soft px-2.5 py-1">
-                                <Text className="text-[10px] font-bold uppercase tracking-wide text-coral-deep">
-                                  Care team
-                                </Text>
-                              </View>
-                            ) : (
-                              <Text className="text-xs font-semibold text-coral-deep">Book →</Text>
-                            )}
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+                <Button
+                  onPress={() => router.push('/psychiatrist' as never)}
+                  fullWidth
+                >
+                  Find a doctor
+                </Button>
               </Card>
 
               <Card className="border-border/90">
                 <Text className="mb-3 text-base font-semibold text-text">
                   Your upcoming appointments
                 </Text>
-                {patientAppointments.length === 0 ? (
+                {visiblePatientAppointments.length === 0 ? (
                   <EmptyState
-                    title="No bookings yet"
-                    message="Choose a doctor above to start the booking flow."
+                    title="No upcoming bookings"
+                    message="Book from Find a doctor to see visits here."
                   />
                 ) : (
-                  patientAppointments.map((appointment) => (
+                  visiblePatientAppointments.map((appointment) => (
                     <View
                       key={appointment.id}
                       className="mb-3 rounded-[18px] border border-coral-soft bg-surface-soft p-4"
@@ -1091,24 +1041,15 @@ export default function AppointmentsScreen() {
                       <Text className="mb-3 text-sm text-text-secondary">
                         {appointment.reason_for_visit || 'General consultation'}
                       </Text>
-                      <View className="flex-row">
+                      {appointment.status === 'booked' ? (
                         <Button
-                          variant="text"
-                          className={appointment.status === 'booked' ? 'mr-2' : ''}
-                          onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                          variant="outline"
+                          fullWidth
+                          onPress={() => cancelPatientAppointment(appointment.id)}
                         >
-                          Details
+                          Cancel booking
                         </Button>
-                        {appointment.status === 'booked' ? (
-                          <Button
-                            variant="outline"
-                            className="flex-1"
-                            onPress={() => cancelPatientAppointment(appointment.id)}
-                          >
-                            Cancel booking
-                          </Button>
-                        ) : null}
-                      </View>
+                      ) : null}
                     </View>
                   ))
                 )}

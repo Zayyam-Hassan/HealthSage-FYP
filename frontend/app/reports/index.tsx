@@ -39,6 +39,8 @@ import {
   type UploadedReportCategory,
 } from '@/services/reports';
 import ReportRecordStatusPill from '@/components/ReportRecordStatusPill';
+import MedicalReportHeader from '@/components/MedicalReportHeader';
+import RecordForPatientHeader from '@/components/RecordForPatientHeader';
 
 const RECORD_TYPE_OPTIONS: {
   value: UploadedReportCategory;
@@ -140,41 +142,6 @@ function getGeneratedPreview(report: GeneratedReport) {
 
 function defaultCategory(role: 'patient' | 'doctor' | null): UploadedReportCategory {
   return role === 'doctor' ? 'doctor_sent' : 'patient_sent';
-}
-
-function MedicalReportHeader({
-  title,
-  onBack,
-}: {
-  title: string;
-  onBack: () => void;
-}) {
-  return (
-    <View className="bg-coral px-4 pb-3 pt-2">
-      <View className="flex-row items-center rounded-2xl bg-white px-1 py-1.5 shadow-sm shadow-black/5">
-        <TouchableOpacity
-          onPress={onBack}
-          className="h-11 w-11 items-center justify-center"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons
-            name={Platform.OS === 'ios' ? 'chevron-back' : 'arrow-back'}
-            size={Platform.OS === 'ios' ? 26 : 22}
-            color={colors.text.primary}
-          />
-        </TouchableOpacity>
-        <Text
-          className="flex-1 text-center text-base font-bold text-text"
-          numberOfLines={1}
-        >
-          {title}
-        </Text>
-        <View className="h-11 w-11" />
-      </View>
-    </View>
-  );
 }
 
 export default function ReportsScreen() {
@@ -741,53 +708,31 @@ export default function ReportsScreen() {
       <MedicalReportHeader title={headerTitle} onBack={handleHeaderBack} />
 
       {showViewFilters ? (
-        <View className="border-b border-border/50 bg-bg-secondary px-6 pb-3 pt-2">
-          {role === 'doctor' && patients.length > 0 ? (
-            <View className="mb-3">
-              <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                Filter by patient
-              </Text>
-              <SearchBar
-                placeholder="Search patient name or ID"
-                value={patientSearchQuery}
-                onChangeText={setPatientSearchQuery}
+        <View className="border-b border-border/50 bg-bg-secondary pb-3 pt-2">
+          {role === 'doctor' && patients.length > 0 && selectedPatient ? (
+            <View className="mx-6 mb-3 overflow-hidden rounded-t-[20px] bg-white shadow-sm">
+              <RecordForPatientHeader
+                name={selectedPatient.full_name?.trim() || 'Patient'}
+                subtitle={
+                  typeof selectedPatient.age === 'number' || selectedPatient.gender
+                    ? [
+                        typeof selectedPatient.age === 'number' ? `${selectedPatient.age} yrs` : '',
+                        selectedPatient.gender ?? '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                    : undefined
+                }
+                onPressEdit={() => {
+                  setPatientSearchQuery('');
+                  setPatientPickerVisible(true);
+                }}
               />
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingTop: 10, paddingBottom: 2 }}
-              >
-                {filteredPatients.map((patient) => {
-                  const selected = patient.id === selectedPatientId;
-                  return (
-                    <TouchableOpacity
-                      key={patient.id}
-                      className={`mr-2 rounded-2xl border px-4 py-2.5 ${
-                        selected ? 'border-coral-deep bg-coral-soft' : 'border-border bg-white'
-                      }`}
-                      onPress={() => setSelectedPatientId(patient.id)}
-                      activeOpacity={0.85}
-                    >
-                      <Text
-                        className={`text-sm font-semibold ${
-                          selected ? 'text-coral-ink' : 'text-text'
-                        }`}
-                        numberOfLines={1}
-                      >
-                        {patient.full_name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-              {filteredPatients.length === 0 ? (
-                <Text className="mt-2 text-sm text-text-secondary">
-                  No patients match your search.
-                </Text>
-              ) : null}
             </View>
           ) : null}
-          <ReportsRecordFilterBar value={recordTypeFilter} onChange={setRecordTypeFilter} />
+          <View className="px-6">
+            <ReportsRecordFilterBar value={recordTypeFilter} onChange={setRecordTypeFilter} />
+          </View>
         </View>
       ) : null}
 
@@ -817,41 +762,24 @@ export default function ReportsScreen() {
 
         {role === 'doctor' && !selectedPatientId ? (
           <View className="px-6 pt-4">
-            <Text className="mb-4 text-center text-base font-semibold text-text">
-              Who is this record for?
-            </Text>
-            <View className="mb-4">
-              <SearchBar
-                placeholder="Filter patients"
-                value={patientSearchQuery}
-                onChangeText={setPatientSearchQuery}
-              />
-            </View>
-            <View className="flex-row flex-wrap justify-center gap-2">
-              {filteredPatients.map((patient) => {
-                const selected = patient.id === selectedPatientId;
-                return (
-                  <TouchableOpacity
-                    key={patient.id}
-                    className={`rounded-2xl border px-4 py-3 ${
-                      selected ? 'border-coral-deep bg-coral-soft' : 'border-border bg-white'
-                    }`}
-                    onPress={() => setSelectedPatientId(patient.id)}
-                  >
-                    <Text
-                      className={`text-sm font-semibold ${selected ? 'text-coral-ink' : 'text-text'}`}
-                    >
-                      {patient.full_name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            {filteredPatients.length === 0 ? (
-              <Text className="mt-4 text-center text-sm text-text-secondary">
-                No assigned patients yet.
-              </Text>
-            ) : null}
+            {patients.length === 0 ? (
+              <Text className="text-center text-sm text-text-secondary">No assigned patients yet.</Text>
+            ) : (
+              <>
+                <View className="overflow-hidden rounded-t-[20px] bg-white shadow-sm">
+                  <RecordForPatientHeader
+                    name="Select patient"
+                    onPressEdit={() => {
+                      setPatientSearchQuery('');
+                      setPatientPickerVisible(true);
+                    }}
+                  />
+                </View>
+                <Text className="mt-3 text-center text-sm text-text-secondary">
+                  Tap the pencil to search and choose who this record is for.
+                </Text>
+              </>
+            )}
           </View>
         ) : primaryTab === 'view' ? (
           <View className="mt-2 px-6 pb-8">
@@ -992,24 +920,18 @@ export default function ReportsScreen() {
               </TouchableOpacity>
             </View>
 
-            <View className="mb-5 rounded-2xl border border-border/50 bg-white px-4 py-3">
-              <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                Record for
-              </Text>
-              <View className="flex-row items-center justify-between">
-                <Text className="flex-1 text-base font-semibold text-text">{recordForName}</Text>
-                {role === 'doctor' ? (
-                  <TouchableOpacity
-                    onPress={() => {
-                      setPatientSearchQuery('');
-                      setPatientPickerVisible(true);
-                    }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="pencil" size={18} color={colors.coral.deep} />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
+            <View className="mb-5 overflow-hidden rounded-2xl border border-border/50 bg-white shadow-sm">
+              <RecordForPatientHeader
+                name={recordForName}
+                onPressEdit={
+                  role === 'doctor'
+                    ? () => {
+                        setPatientSearchQuery('');
+                        setPatientPickerVisible(true);
+                      }
+                    : undefined
+                }
+              />
             </View>
 
             <View className="mb-5">

@@ -72,7 +72,11 @@ export default function PatientDetailsScreen() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title="Patient Details" showBack />
+        <Header
+          variant="coral"
+          title="Patient Details"
+          showBack
+        />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -81,7 +85,11 @@ export default function PatientDetailsScreen() {
   if (error || !patient) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title="Patient Details" showBack />
+        <Header
+          variant="coral"
+          title="Patient Details"
+          showBack
+        />
         <View className="flex-1 items-center justify-center px-6">
           <Card className="w-full max-w-sm border-border/80">
             <View className="items-center py-2">
@@ -132,7 +140,14 @@ export default function PatientDetailsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header title="Patient chart" showBack />
+      <Header
+        variant="coral"
+        title="Patient chart"
+        subtitle={
+          role === 'doctor' ? patient.full_name?.trim() || undefined : undefined
+        }
+        showBack
+      />
       <ScrollView
         contentContainerStyle={{ paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}

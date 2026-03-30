@@ -16,10 +16,14 @@ import {
 } from '../models/ScheduledAppointment';
 import type { JwtPayload } from '../utils/jwt';
 
-/** Max days in a month; generation is capped by month end anyway. */
+/** Upper bound for how far ahead we generate / list slots (rolling window). */
 const MAX_GENERATION_DAYS = 31;
+/** When `days_ahead` is omitted, use at least this many calendar days so every weekday can appear. */
+const DEFAULT_SCHEDULING_HORIZON_DAYS = 14;
 const MIN_SLOT_DURATION_MINUTES = 5;
 const MAX_SLOT_DURATION_MINUTES = 120;
+/** Idle time between consecutive slot end and next slot start (buffer / turnaround). */
+const GAP_BETWEEN_SLOTS_MINUTES = 10;
 
 export interface AvailabilityInput {
   weekday: Weekday;
@@ -180,16 +184,38 @@ function daysFromDateThroughEndOfMonthInclusive(date: Date): number {
 }
 
 /**
- * Doctor scheduling is limited to the current calendar month (recurring rules still apply per weekday,
- * but only slots for this month are generated / listed).
+ * How many calendar days (start from `rangeStart`) to include for slot generation / listing.
+ * - If `days_ahead` is omitted: use at least {@link DEFAULT_SCHEDULING_HORIZON_DAYS} so a short
+ *   "rest of month" window (e.g. 1 day on March 31) does not yield zero slots when the weekday
+ *   does not match that single day.
+ * - If `days_ahead` is set: honor it (up to {@link MAX_GENERATION_DAYS}).
  */
-function resolveDaysAheadWithinMonth(
+function resolveSchedulingHorizonDays(
   inputDaysAhead: number | undefined,
   rangeStart: Date,
 ): number {
   const monthCap = daysFromDateThroughEndOfMonthInclusive(rangeStart);
-  const requested = inputDaysAhead ?? monthCap;
-  return Math.min(Math.max(Math.min(requested, monthCap), 1), MAX_GENERATION_DAYS);
+  if (inputDaysAhead != null) {
+    return Math.min(Math.max(inputDaysAhead, 1), MAX_GENERATION_DAYS);
+  }
+  const defaultDays = Math.min(
+    Math.max(monthCap, DEFAULT_SCHEDULING_HORIZON_DAYS),
+    MAX_GENERATION_DAYS,
+  );
+  return Math.max(defaultDays, 1);
+}
+
+function normalizeBulkWriteUpsertCount(result: unknown): number {
+  if (result == null) return 0;
+  const r = result as {
+    upsertedCount?: number;
+    upserted?: unknown[];
+    result?: { upserted?: unknown[] };
+  };
+  if (typeof r.upsertedCount === 'number') return r.upsertedCount;
+  if (Array.isArray(r.upserted)) return r.upserted.length;
+  if (Array.isArray(r.result?.upserted)) return r.result.upserted.length;
+  return 0;
 }
 
 function rangesOverlap(
@@ -447,10 +473,13 @@ function buildSlotCandidates(
     endDatetime: Date;
   }> = [];
 
+  const stepMinutes =
+    availability.slot_duration_minutes + GAP_BETWEEN_SLOTS_MINUTES;
+
   for (
     let cursor = startMinutes;
     cursor + availability.slot_duration_minutes <= endMinutes;
-    cursor += availability.slot_duration_minutes
+    cursor += stepMinutes
   ) {
     const slotStart = cursor;
     const slotEnd = cursor + availability.slot_duration_minutes;
@@ -712,7 +741,7 @@ export async function generateSlotsForDoctorUser(
       ? startOfDay(new Date(`${input.start_date}T00:00:00`))
       : startOfDay(new Date());
 
-  const daysAhead = resolveDaysAheadWithinMonth(input.days_ahead, startDate);
+  const daysAhead = resolveSchedulingHorizonDays(input.days_ahead, startDate);
 
   const now = new Date();
   const operations: mongoose.AnyBulkWriteOperation<AppointmentSlotDocument>[] = [];
@@ -760,7 +789,13 @@ export async function generateSlotsForDoctorUser(
       ? await AppointmentSlot.bulkWrite(operations, { ordered: false })
       : null;
 
-  const generatedCount = result?.upsertedCount ?? 0;
+  const generatedCount = normalizeBulkWriteUpsertCount(result);
+
+  if (totalCandidates === 0 && availabilities.length > 0) {
+    console.warn(
+      `[scheduling] zero slot candidates doctor=${doctor.id} daysAhead=${daysAhead} availabilities=${availabilities.length} — check weekday vs date range, window size vs slot duration + gap, breaks, or all times in the past`,
+    );
+  }
 
   console.info(
     `[scheduling] slots generated doctor=${doctor.id} generated=${generatedCount} candidates=${totalCandidates}`,
@@ -780,7 +815,7 @@ export async function listDoctorSlotsForUser(
 ): Promise<{ items: SchedulingSlotResponse[] }> {
   const doctor = await requireDoctorForUser(userId);
   const rangeStart = startOfDay(new Date());
-  const daysAhead = resolveDaysAheadWithinMonth(input?.days_ahead, rangeStart);
+  const daysAhead = resolveSchedulingHorizonDays(input?.days_ahead, rangeStart);
   const until = addDays(rangeStart, daysAhead + 1);
   const filter: {
     doctor_id: mongoose.Types.ObjectId;
@@ -872,7 +907,7 @@ export async function listPatientVisibleSlots(
   }
 
   const rangeStart = startOfDay(new Date());
-  const daysAhead = resolveDaysAheadWithinMonth(input.days_ahead, rangeStart);
+  const daysAhead = resolveSchedulingHorizonDays(input.days_ahead, rangeStart);
   const until = addDays(rangeStart, daysAhead + 1);
 
   const slots = await AppointmentSlot.find({

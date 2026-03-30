@@ -38,7 +38,7 @@ export default function MedicationDetailsScreen() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <Header title="Medication Details" showBack />
+        <Header variant="coral" title="Medication details" showBack />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -47,7 +47,7 @@ export default function MedicationDetailsScreen() {
   if (error || !medication) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <Header title="Medication Details" showBack />
+        <Header variant="coral" title="Medication details" showBack />
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-base text-text-secondary text-center mb-4">
             {error || 'Medication not found'}
@@ -62,7 +62,7 @@ export default function MedicationDetailsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      <Header title="Medication Details" showBack />
+      <Header variant="coral" title="Medication details" showBack />
       <ScrollView
         contentContainerStyle={{ paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}

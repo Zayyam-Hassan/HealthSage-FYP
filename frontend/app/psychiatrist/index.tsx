@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Image,
   RefreshControl,
   ScrollView,
@@ -11,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import AppDialog from '@/components/AppDialog';
 import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import Header from '@/components/Header';
@@ -19,10 +19,13 @@ import SearchBar from '@/components/searchbar';
 import { colors } from '@/constants/colors';
 import { images } from '@/constants/images';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import { doctorsService, type Doctor } from '@/services/doctors';
+import { navigateToConfirmBookingIfSlots } from '@/utils/bookingNavigation';
 
 export default function PsychiatristListScreen() {
   const router = useRouter();
+  const { dialog, hideDialog, showDialog } = useAppDialog();
   const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -66,23 +69,14 @@ export default function PsychiatristListScreen() {
 
   const filtered = useMemo(() => doctors, [doctors]);
 
-  const requestDoctor = async (doctorId: string) => {
-    try {
-      await doctorsService.requestAssignment(doctorId);
-      await loadDoctors();
-      Alert.alert(
-        'Request sent',
-        'The doctor can now confirm the relationship from the patients panel.',
-      );
-    } catch (err: any) {
-      Alert.alert('Unable to send request', err.message || 'Please try again.');
-    }
-  };
-
   if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title={role === 'patient' ? 'Find your doctor' : 'Doctors'} showBack />
+        <Header
+          variant="coral"
+          title={role === 'patient' ? 'Find your doctor' : 'Doctors'}
+          showBack
+        />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -90,7 +84,18 @@ export default function PsychiatristListScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header title={role === 'patient' ? 'Find your doctor' : 'Doctors'} showBack />
+      <AppDialog
+        visible={dialog.visible}
+        title={dialog.title}
+        message={dialog.message}
+        actions={dialog.actions}
+        onClose={hideDialog}
+      />
+      <Header
+        variant="coral"
+        title={role === 'patient' ? 'Find your doctor' : 'Doctors'}
+        showBack
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -107,19 +112,19 @@ export default function PsychiatristListScreen() {
         }
       >
         <View className="px-6 pt-6">
-          <View className="mb-5 overflow-hidden rounded-3xl border border-coral-soft bg-coral px-4 py-4">
+          <View className="mb-5 overflow-hidden rounded-3xl border border-white/25 bg-coral px-4 py-4">
             <Image
               source={images.highlight}
               className="absolute -right-8 -top-8 h-40 w-40 opacity-20"
               resizeMode="contain"
             />
-            <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-coral-ink/60 mb-2">
+            <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/75 mb-2">
               {role === 'patient' ? 'Specialist hunt' : 'Care team'}
             </Text>
-            <Text className="text-3xl font-bold text-coral-ink mb-1 tracking-tight leading-9">
+            <Text className="text-3xl font-bold text-white mb-1 tracking-tight leading-9">
               {role === 'patient' ? 'Doctors OnBoard' : 'Clinician directory'}
             </Text>
-            <Text className="text-sm text-coral-ink/80 leading-6">
+            <Text className="text-sm text-white/90 leading-6">
               {role === 'patient'
                 ? "Let's connect with a specialist"
                 : 'Open a profile to view contact details.'}
@@ -207,8 +212,10 @@ export default function PsychiatristListScreen() {
 
                     <View className="mt-3 flex-row items-center justify-between">
                       <View className="flex-1 pr-3">
-                        <Text className="text-sm font-semibold text-coral-deep">Next Available</Text>
-                        <Text className="text-xs text-text-secondary">Tomorrow</Text>
+                        <Text className="text-xs font-semibold uppercase tracking-wide text-text-tertiary">
+                          Location
+                        </Text>
+                        <Text className="text-sm text-text-secondary mt-0.5">Location not shared</Text>
                       </View>
                       {role === 'patient' &&
                       !doctor.relationship?.is_selected &&
@@ -217,7 +224,7 @@ export default function PsychiatristListScreen() {
                         <TouchableOpacity
                           onPress={(event) => {
                             event.stopPropagation();
-                            requestDoctor(doctor.id);
+                            void navigateToConfirmBookingIfSlots(router, doctor.id, showDialog);
                           }}
                           className="rounded-xl bg-primary px-6 py-2.5"
                         >

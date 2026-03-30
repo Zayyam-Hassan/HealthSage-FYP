@@ -5,7 +5,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Text,
@@ -14,7 +13,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+import AppDialog from '@/components/AppDialog';
+import SuccessPopup from '@/components/SuccessPopup';
 import { colors } from '@/constants/colors';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import { buildAuthorizedReportFileUrl } from '@/utils/reportFileUrl';
 
 /**
@@ -185,6 +187,7 @@ function buildPdfJsHtml(base64: string): string {
 
 export default function ReportDocumentViewerScreen() {
   const router = useRouter();
+  const { dialog, hideDialog, showDialog } = useAppDialog();
   const params = useLocalSearchParams<{
     path?: string;
     title?: string;
@@ -205,6 +208,7 @@ export default function ReportDocumentViewerScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [downloadSuccessVisible, setDownloadSuccessVisible] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const cachedFileRef = useRef<string | null>(null);
 
@@ -361,7 +365,7 @@ export default function ReportDocumentViewerScreen() {
       setDownloading(true);
       const docDir = FileSystem.documentDirectory;
       if (!docDir) {
-        Alert.alert('Download unavailable', 'Could not access local storage.');
+        showDialog('Download unavailable', 'Could not access local storage.');
         return;
       }
 
@@ -378,9 +382,12 @@ export default function ReportDocumentViewerScreen() {
         await FileSystem.downloadAsync(authorized, targetPath);
       }
 
-      Alert.alert('Downloaded', 'The PDF was saved to your app documents.');
+      setDownloadSuccessVisible(true);
     } catch (e: any) {
-      Alert.alert('Download failed', e?.message ?? 'Unable to download this PDF right now.');
+      showDialog(
+        'Download failed',
+        e?.message ?? 'Unable to download this PDF right now.',
+      );
     } finally {
       setDownloading(false);
     }
@@ -520,6 +527,18 @@ export default function ReportDocumentViewerScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
+      <AppDialog
+        visible={dialog.visible}
+        title={dialog.title}
+        message={dialog.message}
+        actions={dialog.actions}
+        onClose={hideDialog}
+      />
+      <SuccessPopup
+        visible={downloadSuccessVisible}
+        message="Saved to your device. You can find it in this app’s documents folder."
+        onClose={() => setDownloadSuccessVisible(false)}
+      />
       <ReportViewerHeader title={decodedTitle} onBack={() => router.back()} />
 
       {loading ? (

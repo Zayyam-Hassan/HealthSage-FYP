@@ -1,20 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Avatar from '@/components/Avatar';
+import AppDialog from '@/components/AppDialog';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Header from '@/components/Header';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { colors } from '@/constants/colors';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import { doctorsService, type Doctor } from '@/services/doctors';
+import { navigateToConfirmBookingIfSlots } from '@/utils/bookingNavigation';
 
 export default function PsychiatristDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const { dialog, hideDialog, showDialog } = useAppDialog();
   const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,12 +50,12 @@ export default function PsychiatristDetailsScreen() {
       setSubmitting(true);
       await doctorsService.requestAssignment(doctor.id);
       await loadDoctor();
-      Alert.alert(
+      showDialog(
         'Request sent',
         'The doctor will now see your confirmation request.',
       );
     } catch (err: any) {
-      Alert.alert('Unable to send request', err.message || 'Please try again.');
+      showDialog('Unable to send request', err.message || 'Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -60,7 +64,7 @@ export default function PsychiatristDetailsScreen() {
   if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title="Doctor profile" showBack />
+        <Header variant="coral" title="Doctor profile" showBack />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -69,7 +73,11 @@ export default function PsychiatristDetailsScreen() {
   if (error || !doctor) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title="Doctor profile" showBack />
+        <Header
+          variant="coral"
+          title="Doctor profile"
+          showBack
+        />
         <View className="flex-1 items-center justify-center px-6">
           <Card className="w-full max-w-sm border-border/80">
             <View className="items-center py-1">
@@ -113,18 +121,35 @@ export default function PsychiatristDetailsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header title="Doctor profile" showBack />
+      <AppDialog
+        visible={dialog.visible}
+        title={dialog.title}
+        message={dialog.message}
+        actions={dialog.actions}
+        onClose={hideDialog}
+      />
+      <Header
+        variant="coral"
+        title="Doctor profile"
+        subtitle={role === 'doctor' ? doctor.name?.trim() || undefined : undefined}
+        showBack
+      />
       <ScrollView
         contentContainerStyle={{ paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="bg-coral px-6 pt-4 pb-7 rounded-b-[28px] mb-5 shadow-sm">
+        <View className="bg-coral px-6 pt-4 pb-7 rounded-b-[28px] mb-5 shadow-sm border-b border-white/20">
           <View className="items-center">
             <Avatar name={doctor.name} size="xl" className="mb-3 border-2 border-white/60" />
-            <Text className="text-2xl font-bold text-coral-ink text-center mb-1">{doctor.name}</Text>
-            <Text className="text-base text-coral-ink/80 text-center mb-3">{doctor.specialization}</Text>
-            <View className="px-3 py-1 rounded-full bg-white/55">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-coral-deep">
+            <Text
+              className="text-2xl font-bold text-center mb-1"
+              style={{ color: colors.text.inverse }}
+            >
+              {doctor.name}
+            </Text>
+            <Text className="text-base text-white/90 text-center mb-3">{doctor.specialization}</Text>
+            <View className="px-3 py-1 rounded-full bg-white/25 border border-white/35">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-white">
                 {statusLabel}
               </Text>
             </View>
@@ -133,6 +158,10 @@ export default function PsychiatristDetailsScreen() {
 
         <View className="px-6">
           <Card className="mb-4 border-coral-soft bg-surface-soft">
+            <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-coral-deep mb-3">
+              Practice location
+            </Text>
+            <Text className="text-sm text-text-secondary leading-6 mb-4">Location not shared</Text>
             <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-coral-deep mb-3">
               Contact
             </Text>
@@ -162,7 +191,7 @@ export default function PsychiatristDetailsScreen() {
 
           <Button
             variant={canRequest ? 'outline' : 'primary'}
-            onPress={() => router.push(`/appointments/doctor/${doctor.id}` as never)}
+            onPress={() => void navigateToConfirmBookingIfSlots(router, doctor.id, showDialog)}
             fullWidth
             className={canRequest ? '' : 'mb-0'}
           >

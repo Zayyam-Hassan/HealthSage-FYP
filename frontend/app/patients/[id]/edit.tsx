@@ -98,7 +98,7 @@ export default function EditPatientScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header title="Edit Patient" showBack />
+      <Header variant="coral" title="Edit Patient" showBack />
       <ScrollView
         contentContainerStyle={{ paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}

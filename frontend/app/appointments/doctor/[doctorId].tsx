@@ -1,20 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  Linking,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import AppDialog from '@/components/AppDialog';
 import Avatar from '@/components/Avatar';
 import Header from '@/components/Header';
 import { colors } from '@/constants/colors';
 import { doctorsService, type Doctor } from '@/services/doctors';
+import { navigateToConfirmBookingIfSlots } from '@/utils/bookingNavigation';
 import { formatApiError } from '@/src/shared/utils/formatApiError';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 
 function StatBox({ label, value }: { label: string; value: string }) {
   return (
@@ -27,6 +25,8 @@ function StatBox({ label, value }: { label: string; value: string }) {
 
 export default function DoctorDetailsScreen() {
   const router = useRouter();
+  const { role } = useAuth();
+  const { dialog, hideDialog, showDialog } = useAppDialog();
   const { doctorId } = useLocalSearchParams<{ doctorId: string }>();
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,7 +54,11 @@ export default function DoctorDetailsScreen() {
   if (loading || !doctorId) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title="Doctor details" showBack />
+        <Header
+          variant="coral"
+          title="Doctor details"
+          showBack
+        />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -63,7 +67,11 @@ export default function DoctorDetailsScreen() {
   if (error || !doctor) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title="Doctor details" showBack />
+        <Header
+          variant="coral"
+          title="Doctor details"
+          showBack
+        />
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-center text-text-secondary">{error || 'Doctor not found.'}</Text>
         </View>
@@ -86,7 +94,19 @@ export default function DoctorDetailsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header title="Doctor details" showBack />
+      <AppDialog
+        visible={dialog.visible}
+        title={dialog.title}
+        message={dialog.message}
+        actions={dialog.actions}
+        onClose={hideDialog}
+      />
+      <Header
+        variant="coral"
+        title="Doctor details"
+        subtitle={role === 'doctor' ? doctor.name?.trim() || undefined : undefined}
+        showBack
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -116,12 +136,7 @@ export default function DoctorDetailsScreen() {
               Session fees vary by visit type — confirm with the clinic when you book.
             </Text>
             <TouchableOpacity
-              onPress={() =>
-                router.push({
-                  pathname: '/appointments/confirm-booking',
-                  params: { doctorId: doctor.id },
-                } as never)
-              }
+              onPress={() => void navigateToConfirmBookingIfSlots(router, doctor.id, showDialog)}
               className="mt-5 items-center rounded-2xl bg-coral-deep py-4 active:opacity-90"
               activeOpacity={0.85}
             >
@@ -146,12 +161,13 @@ export default function DoctorDetailsScreen() {
           </View>
 
           <View className="overflow-hidden rounded-3xl bg-white shadow-sm">
-            <View className="h-40 items-center justify-center bg-bg-secondary">
-              <Ionicons name="location" size={40} color={colors.coral.deep} />
-              <Text className="mt-2 text-center text-xs text-text-secondary px-4">
-                {doctor.phone
-                  ? 'Tap contact to reach the clinic for directions.'
-                  : 'Location details are shared when your visit is confirmed.'}
+            <View className="h-36 items-center justify-center bg-bg-secondary px-4">
+              <Ionicons name="location-outline" size={36} color={colors.text.tertiary} />
+              <Text className="mt-2 text-center text-sm font-semibold text-text">
+                Location not shared
+              </Text>
+              <Text className="mt-1 text-center text-xs text-text-secondary leading-5">
+                The clinic has not published an address in the app. Use contact details if you need directions.
               </Text>
             </View>
             {doctor.phone ? (

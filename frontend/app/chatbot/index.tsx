@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +14,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import * as ExpoLinking from 'expo-linking';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +22,7 @@ import AppDialog from '@/components/AppDialog';
 import { formatApiError } from '@/src/shared/utils/formatApiError';
 import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import Header from '@/components/Header';
+import SearchBar from '@/components/searchbar';
 import { colors } from '@/constants/colors';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { chatbotService, type ConversationSummary } from '@/services/chatbot';
@@ -460,6 +463,8 @@ export default function ChatbotScreen() {
   const [startFreshConversation, setStartFreshConversation] = useState(true);
   const [sending, setSending] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [patientPickerVisible, setPatientPickerVisible] = useState(false);
   const { dialog, hideDialog, showDialog } = useAppDialog();
   const flatListRef = useRef<FlatList<Message>>(null);
   const seededPromptSentRef = useRef(false);
@@ -468,6 +473,12 @@ export default function ChatbotScreen() {
     () => patientOptions.find((option) => option.id === patientId) ?? null,
     [patientId, patientOptions],
   );
+
+  const filteredPatientOptions = useMemo(() => {
+    const q = patientSearchQuery.trim().toLowerCase();
+    if (!q) return patientOptions;
+    return patientOptions.filter((o) => o.label.toLowerCase().includes(q));
+  }, [patientOptions, patientSearchQuery]);
 
   const activeConversation = useMemo(
     () => conversationSessions.find((session) => session.conversation_id === conversationId) ?? null,
@@ -803,31 +814,28 @@ export default function ChatbotScreen() {
         </TouchableOpacity>
       ) : null}
 
-      <Text style={styles.sidebarSectionLabel}>Patients</Text>
-      <ScrollView
-        style={styles.patientList}
-        contentContainerStyle={styles.patientListContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {patientOptions.map((patient) => {
-          const isActive = patient.id === patientId;
-          return (
-            <TouchableOpacity
-              key={patient.id}
-              style={[styles.patientChip, isActive ? styles.patientChipActive : null]}
-              activeOpacity={0.85}
-              onPress={() => {
-                setPatientId(patient.id);
-                setSidebarVisible(false);
-              }}
-            >
-              <Text style={[styles.patientChipText, isActive ? styles.patientChipTextActive : null]}>
-                {patient.label}
+      {patientOptions.length > 0 ? (
+        <>
+          <Text style={styles.sidebarSectionLabel}>Patient</Text>
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => {
+              setPatientSearchQuery('');
+              setPatientPickerVisible(true);
+            }}
+            style={styles.recordForCard}
+          >
+            <Text style={styles.recordForLabel}>Record for</Text>
+            <View style={styles.recordForRow}>
+              <Text style={styles.recordForName} numberOfLines={1}>
+                {selectedPatient?.label || 'Select patient'}
               </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+              <Ionicons name="pencil" size={18} color={colors.text.primary} />
+            </View>
+            <View style={styles.recordForDivider} />
+          </TouchableOpacity>
+        </>
+      ) : null}
 
       <View style={styles.sessionHeaderRow}>
         <Text style={styles.sidebarSectionLabel}>Recent sessions</Text>
@@ -878,7 +886,51 @@ export default function ChatbotScreen() {
         onClose={hideDialog}
       />
 
-      <Header title="HealthSage Assistant" showBack />
+      <Modal
+        visible={patientPickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPatientPickerVisible(false)}
+      >
+        <Pressable style={styles.patientModalBackdrop} onPress={() => setPatientPickerVisible(false)}>
+          <Pressable style={styles.patientModalSheet} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.patientModalTitle}>Record for</Text>
+            <View style={styles.patientModalSearch}>
+              <SearchBar
+                placeholder="Search patients"
+                value={patientSearchQuery}
+                onChangeText={setPatientSearchQuery}
+              />
+            </View>
+            <ScrollView
+              style={styles.patientModalList}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {filteredPatientOptions.map((p) => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={styles.patientModalRow}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setPatientId(p.id);
+                    setPatientPickerVisible(false);
+                    setSidebarVisible(false);
+                  }}
+                >
+                  <Text style={styles.patientModalRowText}>{p.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Header
+        variant="coral"
+        title="HealthSage Assistant"
+        showBack
+      />
 
       <View style={styles.shell}>
         {isDesktop ? <View style={styles.sidebarDesktop}>{sidebarContent}</View> : null}
@@ -896,13 +948,26 @@ export default function ChatbotScreen() {
                 </TouchableOpacity>
               ) : null}
 
-              <View>
+              <View style={{ flexShrink: 1 }}>
                 <Text style={styles.threadTitle}>
                   {activeConversation?.subject || 'New clinical chat'}
                 </Text>
-                <Text style={styles.threadSubtitle}>
-                  {selectedPatient?.label || 'Select a patient'}
-                </Text>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    if (patientOptions.length === 0) return;
+                    setPatientSearchQuery('');
+                    setPatientPickerVisible(true);
+                  }}
+                  style={styles.threadPatientRow}
+                >
+                  <Text style={styles.threadPatientName} numberOfLines={1}>
+                    {selectedPatient?.label || 'Select a patient'}
+                  </Text>
+                  {patientOptions.length > 0 ? (
+                    <Ionicons name="pencil" size={15} color={colors.text.primary} />
+                  ) : null}
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -1114,31 +1179,73 @@ const styles = StyleSheet.create({
     letterSpacing: 0.9,
     marginBottom: 10,
   },
-  patientList: {
-    maxHeight: 168,
-    marginBottom: 16,
-  },
-  patientListContent: {
-    gap: 8,
-  },
-  patientChip: {
-    borderRadius: 14,
+  recordForCard: {
+    backgroundColor: colors.background.card,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border.light,
-    backgroundColor: colors.background.secondary,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    marginBottom: 16,
   },
-  patientChipActive: {
-    borderColor: colors.primary.main,
-    backgroundColor: colors.primary.light,
-  },
-  patientChipText: {
+  recordForLabel: {
     color: colors.text.primary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
+    marginBottom: 6,
   },
-  patientChipTextActive: {
+  recordForRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+  },
+  recordForName: {
+    flex: 1,
+    color: colors.coral.deep,
+    fontSize: 17,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  recordForDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border.medium,
+  },
+  patientModalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  patientModalSheet: {
+    maxHeight: '72%',
+    backgroundColor: colors.background.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingBottom: 28,
+    paddingTop: 8,
+  },
+  patientModalTitle: {
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: 12,
+  },
+  patientModalSearch: {
+    marginBottom: 8,
+  },
+  patientModalList: {
+    maxHeight: 400,
+  },
+  patientModalRow: {
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.light,
+  },
+  patientModalRowText: {
+    fontSize: 16,
+    fontWeight: '600',
     color: colors.text.primary,
   },
   sessionHeaderRow: {
@@ -1247,6 +1354,19 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: 13,
     marginTop: 2,
+  },
+  threadPatientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    maxWidth: 260,
+  },
+  threadPatientName: {
+    color: colors.coral.deep,
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 6,
+    flexShrink: 1,
   },
   compactNewChatButton: {
     borderRadius: 14,

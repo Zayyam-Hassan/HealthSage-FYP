@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import Card from '@/components/Card';
 import SectionHeader from '@/components/SectionHeader';
-import Select from '@/components/Select';
+import ClinicalDropdown from '@/components/ClinicalDropdown';
 import type { ClinicalFormHandlers } from '../clinicalFormHandlers';
 import type { PatientFormErrors, PatientFormValues } from '@/interfaces/patient';
 
@@ -41,7 +41,7 @@ export function LifestyleSection({
 
       <View className="flex-row flex-wrap gap-3">
         <View className="w-full">
-          <Select
+          <ClinicalDropdown
             label="Smoking"
             value={formData.lifestyle?.smoking || ''}
             options={smokingOptions}
@@ -50,7 +50,7 @@ export function LifestyleSection({
           />
         </View>
         <View className="w-full">
-          <Select
+          <ClinicalDropdown
             label="Drinking"
             value={formData.lifestyle?.drinking || ''}
             options={drinkingOptions}
@@ -59,7 +59,7 @@ export function LifestyleSection({
           />
         </View>
         <View className="w-full">
-          <Select
+          <ClinicalDropdown
             label="Exercise"
             value={formData.lifestyle?.exercise || ''}
             options={[...EXERCISE]}

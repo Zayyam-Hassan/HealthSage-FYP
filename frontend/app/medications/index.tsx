@@ -57,7 +57,7 @@ export default function MedicationsListScreen() {
   if (loading && medications.length === 0) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <Header title="Medications" showBack />
+        <Header variant="coral" title="Medications" showBack />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -65,7 +65,7 @@ export default function MedicationsListScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      <Header title="Medications" showBack />
+      <Header variant="coral" title="Medications" showBack />
       <View className="px-6 pt-4 pb-4">
         <SearchBar
           placeholder="Search medications by name, brand, or category..."

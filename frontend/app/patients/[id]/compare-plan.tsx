@@ -177,7 +177,7 @@ export default function CompareDoctorPlanScreen() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <Header title="Compare Doctor Plan" showBack />
+        <Header variant="coral" title="Compare doctor plan" showBack />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -185,22 +185,29 @@ export default function CompareDoctorPlanScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      <Header title="Compare Doctor Plan" showBack />
+      <Header
+        variant="coral"
+        title="Compare doctor plan"
+        subtitle={patient?.full_name?.trim() || undefined}
+        showBack
+      />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28 }}>
         <View className="px-6 pt-4">
-          <Card className="mb-4 border border-primary/20 bg-primary/5">
-            <Text className="text-xs uppercase tracking-[1px] text-text-secondary mb-2">
-              Patient context
-            </Text>
-            <Text className="text-xl font-bold text-text mb-1">
-              {patient?.full_name ?? 'Assigned patient'}
-            </Text>
-            <Text className="text-sm text-text-secondary">
-              {activePlan
-                ? `Active doctor plan updated ${formatDateTime(activePlan.updated_at)}`
-                : 'No active doctor-authored treatment plan saved yet'}
-            </Text>
-          </Card>
+          <View className="mb-4 overflow-hidden rounded-2xl border border-white/25 bg-coral shadow-sm">
+            <View className="px-5 pt-4 pb-4">
+              <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80">
+                Patient context
+              </Text>
+              <Text className="mt-2 text-xl font-bold tracking-tight text-white" numberOfLines={2}>
+                {patient?.full_name ?? 'Assigned patient'}
+              </Text>
+              <Text className="mt-1 text-sm text-white/90 leading-5">
+                {activePlan
+                  ? `Active doctor plan updated ${formatDateTime(activePlan.updated_at)}`
+                  : 'No active doctor-authored treatment plan saved yet'}
+              </Text>
+            </View>
+          </View>
 
           {error ? (
             <View className="mb-4 rounded-xl bg-error/10 px-4 py-3">

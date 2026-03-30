@@ -24,8 +24,11 @@ import AppointmentMonthCalendar, {
 /** Match reference: same minute options as design */
 const REMINDER_OPTIONS = [30, 40, 25, 10, 35] as const;
 
-/** Local calendar day key — aligns grid with slot instants (avoids UTC vs local mismatch). */
-function dateKeyFromSlot(s: AppointmentSlot): string {
+/** Calendar day key for grouping — prefer server `slot_date` so it matches the grid and DB day. */
+function slotCalendarDateKey(s: AppointmentSlot): string {
+  if (s.slot_date && /^\d{4}-\d{2}-\d{2}$/.test(s.slot_date)) {
+    return s.slot_date;
+  }
   const d = new Date(s.start_datetime);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -81,8 +84,6 @@ export default function ConfirmBookingScreen() {
   const [reminderMinutes, setReminderMinutes] = useState<number | null>(25);
   const [submitting, setSubmitting] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
-  const [bookedAppointmentId, setBookedAppointmentId] = useState<string | null>(null);
-  const [bookedStatus, setBookedStatus] = useState<string>('booked');
 
   const load = useCallback(async () => {
     if (!doctorId) return;
@@ -120,7 +121,7 @@ export default function ConfirmBookingScreen() {
             new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime(),
         )[0];
       }
-      const initialKey = dateKeyFromSlot(initial);
+      const initialKey = slotCalendarDateKey(initial);
       setSelectedDateKey(initialKey);
       setSelectedSlot(initial);
       const d = new Date(initial.start_datetime);
@@ -140,7 +141,7 @@ export default function ConfirmBookingScreen() {
   const slotsByDate = useMemo(() => {
     const map = new Map<string, AppointmentSlot[]>();
     for (const s of allSlots) {
-      const key = dateKeyFromSlot(s);
+      const key = slotCalendarDateKey(s);
       const list = map.get(key) ?? [];
       list.push(s);
       map.set(key, list);
@@ -166,6 +167,14 @@ export default function ConfirmBookingScreen() {
 
   const noSlotsOnSelectedDay = timesForSelectedDay.length === 0;
 
+  const confirmLine = useMemo(() => {
+    if (!selectedSlot) return { dateLine: '', timeLine: '' };
+    return {
+      dateLine: selectedSlot.display_date,
+      timeLine: selectedSlot.display_time,
+    };
+  }, [selectedSlot]);
+
   const nextAvailabilityLabel = useMemo(() => {
     if (!selectedDateKey || sortedDateKeys.length === 0) return null;
     const next = sortedDateKeys.find((d) => d > selectedDateKey);
@@ -178,14 +187,6 @@ export default function ConfirmBookingScreen() {
     })}`;
   }, [selectedDateKey, sortedDateKeys]);
 
-  const confirmLine = useMemo(() => {
-    if (!selectedSlot) return { dateLine: '', timeLine: '' };
-    return {
-      dateLine: selectedSlot.display_date,
-      timeLine: selectedSlot.display_time,
-    };
-  }, [selectedSlot]);
-
   const shiftMonth = useCallback(
     (delta: number) => {
       const d = new Date(viewYear, viewMonth + delta, 1);
@@ -193,17 +194,21 @@ export default function ConfirmBookingScreen() {
       const m = d.getMonth();
       setViewYear(y);
       setViewMonth(m);
+      const monthPrefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
+      const keysInMonth = sortedDateKeys.filter((k) => k.startsWith(monthPrefix));
+      if (keysInMonth.length > 0) {
+        const key = keysInMonth[0];
+        setSelectedDateKey(key);
+        const daySlots = slotsByDate.get(key);
+        setSelectedSlot(daySlots?.[0] ?? null);
+        return;
+      }
       const day = firstSelectableDayInMonth(y, m);
       const key = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       setSelectedDateKey(key);
-      const daySlots = slotsByDate.get(key);
-      if (daySlots?.length) {
-        setSelectedSlot(daySlots[0]);
-      } else {
-        setSelectedSlot(null);
-      }
+      setSelectedSlot(null);
     },
-    [viewYear, viewMonth, slotsByDate],
+    [viewYear, viewMonth, slotsByDate, sortedDateKeys],
   );
 
   const monthSwipeResponder = useMemo(
@@ -258,11 +263,9 @@ export default function ConfirmBookingScreen() {
     try {
       setSubmitting(true);
       setError(null);
-      const appt = await appointmentsService.createPatientAppointment({
+      await appointmentsService.createPatientAppointment({
         slot_id: selectedSlot.id,
       });
-      setBookedAppointmentId(appt.id);
-      setBookedStatus(appt.status ?? 'booked');
       setSuccessVisible(true);
     } catch (err: unknown) {
       setError(formatApiError(err, 'Unable to confirm. Try another slot.'));
@@ -273,7 +276,7 @@ export default function ConfirmBookingScreen() {
 
   const goBack = () => {
     if (router.canGoBack()) router.back();
-    else router.replace('/appointments');
+    else router.replace('/(tabs)' as never);
   };
 
   /** Header overlays content; scroll padding so first paint clears header, scroll moves content under it */
@@ -478,19 +481,11 @@ export default function ConfirmBookingScreen() {
         doctorName={doctor.name}
         dateLine={confirmLine.dateLine}
         timeLine={confirmLine.timeLine}
-        statusLabel={bookedStatus === 'booked' ? 'Confirmed' : bookedStatus}
+        statusLabel="Confirmed"
         onDone={() => {
           setSuccessVisible(false);
-          router.replace('/appointments');
+          router.replace('/(tabs)/saved' as never);
         }}
-        onEditAppointment={
-          bookedAppointmentId
-            ? () => {
-                setSuccessVisible(false);
-                router.replace(`/appointments/${bookedAppointmentId}` as never);
-              }
-            : undefined
-        }
       />
     </View>
   );

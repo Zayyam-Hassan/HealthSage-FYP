@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import Card from '@/components/Card';
 import FormInput from '@/components/FormInput';
 import SectionHeader from '@/components/SectionHeader';
-import Select from '@/components/Select';
+import ClinicalDropdown from '@/components/ClinicalDropdown';
 import type { ClinicalFormHandlers } from '../clinicalFormHandlers';
 import type { PatientFormErrors, PatientFormValues } from '@/interfaces/patient';
 
@@ -50,7 +50,7 @@ export function DemographicsSection({ mode, formData, errors, handlers }: Props)
             />
           </View>
           <View className="flex-1">
-            <Select
+            <ClinicalDropdown
               label="Gender"
               value={formData.gender}
               options={['Male', 'Female', 'Other']}
@@ -91,7 +91,7 @@ export function DemographicsSection({ mode, formData, errors, handlers }: Props)
             />
           </View>
           <View className="flex-1">
-            <Select
+            <ClinicalDropdown
               label="Gender"
               value={formData.gender}
               options={['Male', 'Female', 'Other']}
@@ -130,7 +130,7 @@ export function DemographicsSection({ mode, formData, errors, handlers }: Props)
           />
         </View>
         <View className="flex-1">
-          <Select
+          <ClinicalDropdown
             label="Gender"
             value={formData.gender}
             options={['Male', 'Female', 'Other']}

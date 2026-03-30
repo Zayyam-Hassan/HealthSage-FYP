@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Header from '@/components/Header';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import Card from '@/components/Card';
 import Button from '@/components/Button';
 import { colors } from '@/constants/colors';
@@ -26,6 +27,7 @@ interface FAQItem {
 
 export default function HelpSupportScreen() {
   const router = useRouter();
+  const { role } = useAuth();
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
   const [contactForm, setContactForm] = useState({
     name: '',
@@ -113,7 +115,11 @@ export default function HelpSupportScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header title="Help & Support" showBack />
+      <Header
+        variant="coral"
+        title="Help & Support"
+        showBack
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}

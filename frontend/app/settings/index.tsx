@@ -34,7 +34,7 @@ type Section =
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, isLoading: loading } = useAuth();
+  const { user, role, isLoading: loading } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
 
@@ -80,7 +80,11 @@ export default function SettingsScreen() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title="Settings" showBack />
+        <Header
+          variant="coral"
+          title="Settings"
+          showBack
+        />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -88,7 +92,11 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header title="Settings" showBack />
+      <Header
+        variant="coral"
+        title="Settings"
+        showBack
+      />
       <ScrollView contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
         <View className="px-6 py-6">
           <Card className="border-border/80 shadow-sm">

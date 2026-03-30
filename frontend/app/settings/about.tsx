@@ -3,11 +3,17 @@ import { View, ScrollView, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '@/components/Header';
 import Card from '@/components/Card';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
 
 export default function AboutScreen() {
+  const { role } = useAuth();
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header title="About" showBack />
+      <Header
+        variant="coral"
+        title="About"
+        showBack
+      />
       <ScrollView
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}

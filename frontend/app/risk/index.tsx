@@ -1,17 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Modal, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AppDialog from '@/components/AppDialog';
 import Header from '@/components/Header';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
+import RecordForPatientHeader from '@/components/RecordForPatientHeader';
+import SearchBar from '@/components/searchbar';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { formatApiError } from '@/src/shared/utils/formatApiError';
 import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import { aiResultsService } from '@/services/aiResults';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
-import { patientsService } from '@/services/patients';
+import { patientsService, type Patient } from '@/services/patients';
 
 type FeatureBar = {
   label: string;
@@ -22,7 +24,9 @@ export default function RiskPredictionScreen() {
   const router = useRouter();
   const { role, isLoading: authLoading } = useAuth();
   const [patientId, setPatientId] = useState('');
-  const [patients, setPatients] = useState<any[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [patientPickerVisible, setPatientPickerVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [screenLoading, setScreenLoading] = useState(true);
   const [riskScore, setRiskScore] = useState<number | null>(null);
@@ -53,6 +57,22 @@ export default function RiskPredictionScreen() {
     })();
   }, [authLoading, role]);
 
+  const selectedPatient = useMemo(
+    () => patients.find((p) => p.id === patientId) ?? null,
+    [patients, patientId],
+  );
+
+  const filteredPatients = useMemo(() => {
+    const query = patientSearchQuery.trim().toLowerCase();
+    if (!query) return patients;
+    return patients.filter(
+      (patient) =>
+        patient.full_name?.toLowerCase().includes(query) ||
+        patient.patient_id?.toLowerCase().includes(query) ||
+        patient.conditions?.some((c) => c.toLowerCase().includes(query)),
+    );
+  }, [patients, patientSearchQuery]);
+
   const runPrediction = async () => {
     if (!patientId) {
       showDialog('Select a patient', 'Choose a patient before running the model.');
@@ -82,13 +102,16 @@ export default function RiskPredictionScreen() {
   if (authLoading || screenLoading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title="Risk Dashboard" showBack />
+        <Header
+          variant="coral"
+          title="Risk dashboard"
+          showBack
+        />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
   }
 
-  const selectedPatient = patients.find((patient) => patient.id === patientId);
   const barColor =
     riskClass === 'high'
       ? 'bg-error'
@@ -116,6 +139,53 @@ export default function RiskPredictionScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
+      <Modal
+        visible={patientPickerVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setPatientPickerVisible(false)}
+      >
+        <Pressable
+          className="flex-1 justify-end bg-black/40"
+          onPress={() => setPatientPickerVisible(false)}
+        >
+          <Pressable
+            className="max-h-[70%] rounded-t-3xl bg-white px-4 pb-8 pt-4"
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text className="mb-3 text-center text-base font-bold text-text">Record for</Text>
+            <View className="mb-3">
+              <SearchBar
+                placeholder="Search assigned patients"
+                value={patientSearchQuery}
+                onChangeText={setPatientSearchQuery}
+              />
+            </View>
+            <ScrollView>
+              {filteredPatients.map((p) => (
+                <TouchableOpacity
+                  key={p.id}
+                  className="border-b border-border/40 py-3"
+                  onPress={() => {
+                    setPatientId(p.id);
+                    setPatientPickerVisible(false);
+                  }}
+                >
+                  <Text className="text-base font-semibold text-text">
+                    {p.full_name?.trim() || 'Patient'}
+                  </Text>
+                  <Text className="text-xs text-text-secondary">
+                    {p.demographics?.age != null ? `${p.demographics.age} yrs` : ''}
+                    {p.demographics?.age != null && p.demographics?.gender ? ' · ' : ''}
+                    {p.demographics?.gender ?? ''}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <AppDialog
         visible={dialog.visible}
         title={dialog.title}
@@ -123,71 +193,56 @@ export default function RiskPredictionScreen() {
         actions={dialog.actions}
         onClose={hideDialog}
       />
-      <Header title="Risk Dashboard" showBack />
+      <Header variant="coral" title="Risk dashboard" showBack />
       <ScrollView
         contentContainerStyle={{ paddingBottom: 28 }}
         showsVerticalScrollIndicator={false}
       >
         <View className="px-6 pt-6">
-          <Card className="mb-6 bg-bg-secondary border-primary/12 shadow-sm">
-            <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-secondary mb-2">
+          <Card className="mb-6 overflow-hidden rounded-2xl border border-white/25 bg-coral shadow-sm">
+            <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/90 mb-2">
               Clinical decision support
             </Text>
-            <Text className="text-2xl font-bold text-text mb-2 tracking-tight">Risk review</Text>
-            <Text className="text-sm text-text-secondary leading-6">
+            <Text className="text-2xl font-bold text-white mb-2 tracking-tight">Risk review</Text>
+            <Text className="text-sm text-white/90 leading-6">
               Select a patient, run the model, then review score, summary, and contributing factors.
             </Text>
           </Card>
 
+          <View className="mb-5 overflow-hidden rounded-t-[20px] bg-white shadow-sm">
+            <RecordForPatientHeader
+              label="Risk review for"
+              name={selectedPatient?.full_name?.trim() || 'Select patient'}
+              subtitle={
+                selectedPatient
+                  ? `ID: ${selectedPatient.patient_id} · ${selectedPatient.demographics.age} yrs · ${selectedPatient.demographics.gender}`
+                  : undefined
+              }
+              onPressEdit={() => {
+                setPatientSearchQuery('');
+                setPatientPickerVisible(true);
+              }}
+            />
+          </View>
+
           <Card className="mb-5 border-border/80">
-            <Text className="text-base font-semibold text-text mb-3 tracking-tight">
-              Select patient
-            </Text>
-            <View className="flex-row flex-wrap">
-              {patients.map((patient) => (
-                <TouchableOpacity
-                  key={patient.id}
-                  onPress={() => setPatientId(patient.id)}
-                  className={`mr-2 mb-2 px-4 py-3 rounded-2xl border ${
-                    patientId === patient.id
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border/90 bg-background'
-                  }`}
-                >
-                  <Text
-                    className={`text-sm font-semibold ${
-                      patientId === patient.id ? 'text-primary' : 'text-text'
-                    }`}
-                  >
-                    {patient.full_name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
             <Button
               onPress={runPrediction}
               loading={loading}
               disabled={!patientId}
               fullWidth
-              className="mt-4"
             >
               Run risk prediction
             </Button>
-            <TouchableOpacity
-              onPress={() => patientId && router.push(`/patients/${patientId}/what-if` as any)}
+            <Button
+              variant="outline"
+              fullWidth
+              className="mt-3"
               disabled={!patientId}
-              className="mt-4 py-2"
-              accessibilityRole="link"
-              accessibilityLabel="Open what-if workspace for selected patient"
+              onPress={() => router.push(`/patients/${patientId}/what-if` as any)}
             >
-              <Text
-                className={`text-center text-sm font-semibold ${
-                  patientId ? 'text-primary' : 'text-text-disabled'
-                }`}
-              >
-                Open what-if workspace for this patient
-              </Text>
-            </TouchableOpacity>
+              What-if analysis
+            </Button>
           </Card>
 
           {riskScore !== null && (

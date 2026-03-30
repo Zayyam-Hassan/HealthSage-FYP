@@ -104,7 +104,11 @@ export default function PatientsListScreen() {
   if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-        <Header title="Patients" showBack />
+        <Header
+          variant="coral"
+          title="Patients"
+          showBack
+        />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -112,7 +116,11 @@ export default function PatientsListScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header title={role === 'doctor' ? 'My Patients' : 'My Profile'} showBack />
+      <Header
+        variant="coral"
+        title={role === 'doctor' ? 'My Patients' : 'My Profile'}
+        showBack
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -129,19 +137,33 @@ export default function PatientsListScreen() {
         }
       >
         <View className="px-6 pt-6">
-          <Card className="mb-5 bg-bg-secondary border-primary/12 shadow-sm">
-            <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-secondary mb-2">
-              {role === 'doctor' ? 'Patient panel' : 'Your record'}
-            </Text>
-            <Text className="text-2xl font-bold text-text mb-1 tracking-tight leading-8">
-              {role === 'doctor' ? 'Patients' : 'My profile'}
-            </Text>
-            <Text className="text-sm text-text-secondary leading-6">
-              {role === 'doctor'
-                ? 'Review assignments and confirmation requests.'
-                : 'Your profile and care identifiers.'}
-            </Text>
-          </Card>
+          {role === 'doctor' ? (
+            <View className="mb-5 overflow-hidden rounded-2xl border border-white/25 bg-coral shadow-sm">
+              <View className="px-5 pt-5 pb-4">
+                <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80">
+                  Patient panel
+                </Text>
+                <Text className="mt-1 text-2xl font-bold tracking-tight text-white leading-8">
+                  Patients
+                </Text>
+                <Text className="mt-1 text-sm text-white/90 leading-6">
+                  Review assignments and confirmation requests.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Card className="mb-5 bg-bg-secondary border-primary/12 shadow-sm">
+              <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-secondary mb-2">
+                Your record
+              </Text>
+              <Text className="text-2xl font-bold text-text mb-1 tracking-tight leading-8">
+                My profile
+              </Text>
+              <Text className="text-sm text-text-secondary leading-6">
+                Your profile and care identifiers.
+              </Text>
+            </Card>
+          )}
 
           <SearchBar
             placeholder={

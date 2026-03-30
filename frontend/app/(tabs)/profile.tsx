@@ -68,7 +68,8 @@ export default function ProfileScreen() {
 
   if (authLoading || loading) {
     return (
-      <SafeAreaView className="flex-1 bg-background">
+      <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+        <Header variant="coral" title="Profile" />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -76,7 +77,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
-      <Header title="Profile" />
+      <Header variant="coral" title="Profile" />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}

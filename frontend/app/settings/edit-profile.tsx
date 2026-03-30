@@ -111,7 +111,11 @@ export default function EditProfileScreen() {
   if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
-        <Header title="Edit Profile" showBack />
+        <Header
+          variant="coral"
+          title="Edit profile"
+          showBack
+        />
         <CenteredScreenLoader />
       </SafeAreaView>
     );
@@ -119,7 +123,11 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header title="Edit Profile" showBack />
+      <Header
+        variant="coral"
+        title="Edit profile"
+        showBack
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
