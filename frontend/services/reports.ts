@@ -30,6 +30,10 @@ export interface GeneratedReport {
   generated_by: string | null;
   source_reference: string | null;
   attachment_url: string | null;
+  is_sent_to_patient: boolean;
+  sent_to_patient_at: string | null;
+  last_sent_at: string | null;
+  send_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -117,6 +121,10 @@ class ReportsService {
 
   async getGeneratedReport(reportId: string): Promise<GeneratedReport> {
     return apiClient.get<GeneratedReport>(`${BASE}/generated/${reportId}`);
+  }
+
+  async shareGeneratedReport(reportId: string): Promise<GeneratedReport> {
+    return apiClient.post<GeneratedReport>(`${BASE}/generated/${reportId}/share`, {});
   }
 
   async getPatientReportsOverview(): Promise<ReportOverviewResponse> {

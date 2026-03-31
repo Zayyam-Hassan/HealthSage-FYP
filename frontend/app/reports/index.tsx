@@ -469,19 +469,6 @@ export default function ReportsScreen() {
   };
 
   const openGeneratedReport = (report: GeneratedReport) => {
-    if (report.attachment_url) {
-      router.push({
-        pathname: '/reports/viewer',
-        params: {
-          path: encodeURIComponent(report.attachment_url),
-          title: encodeURIComponent(report.title),
-          mime: 'application/pdf',
-          reportId: report.id,
-          kind: 'generated',
-        },
-      } as any);
-      return;
-    }
     router.push({
       pathname: '/reports/[id]',
       params: { id: report.id, kind: 'generated' },

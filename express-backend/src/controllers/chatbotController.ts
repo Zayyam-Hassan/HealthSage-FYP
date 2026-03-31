@@ -479,6 +479,14 @@ async function createPatientCareSummary(
   }
 
   const patientName = patient?.full_name ?? 'Patient';
+  const doctorProfile =
+    createdByUserId && mongoose.isValidObjectId(createdByUserId)
+      ? await Doctor.findOne({
+          user_id: new mongoose.Types.ObjectId(createdByUserId),
+        })
+          .select({ name: 1, specialization: 1 })
+          .lean()
+      : null;
   const content = buildPatientCareReportContent({
     patient,
     latestRisk,
@@ -486,6 +494,8 @@ async function createPatientCareSummary(
     latestMedication: recommendationArtifacts.latestMedication ?? (patientContext as any)?.latest_medication,
     agentOutputs: enrichedAgentOutputs,
     conversationId,
+    doctorName: doctorProfile?.name ?? null,
+    doctorSpecialization: doctorProfile?.specialization ?? null,
   });
 
   const report = await Report.create({

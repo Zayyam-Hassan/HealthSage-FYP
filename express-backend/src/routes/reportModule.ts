@@ -15,6 +15,7 @@ import {
   getPatientGeneratedReports,
   getPatientReportsSummary,
   getPatientUploadedReports,
+  shareGeneratedReport,
   getUploadedReport,
   removeUploadedReport,
 } from '../controllers/reportModuleController';
@@ -66,6 +67,12 @@ router.get(
 );
 router.get('/generated/:reportId', requireAuth, getGeneratedReport);
 router.get('/generated/:reportId/file', requireAuth, downloadGeneratedReport);
+router.post(
+  '/generated/:reportId/share',
+  requireAuth,
+  requireRole('doctor'),
+  shareGeneratedReport,
+);
 
 router.get('/patient/overview', requireAuth, requireRole('patient'), getPatientReportsSummary);
 router.get(

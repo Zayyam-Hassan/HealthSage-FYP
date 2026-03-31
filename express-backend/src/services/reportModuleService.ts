@@ -63,6 +63,10 @@ export interface GeneratedReportResponse {
   generated_by: string | null;
   source_reference: string | null;
   attachment_url: string | null;
+  is_sent_to_patient: boolean;
+  sent_to_patient_at: string | null;
+  last_sent_at: string | null;
+  send_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -143,9 +147,42 @@ function mapGeneratedReport(report: ReportDocument): GeneratedReportResponse {
     generated_by: report.generated_by ?? null,
     source_reference: report.source_reference ?? null,
     attachment_url: report.attachment_path ? buildGeneratedFileUrl(report.id) : null,
+    is_sent_to_patient: Boolean(report.is_sent_to_patient),
+    sent_to_patient_at: report.sent_to_patient_at?.toISOString?.() ?? null,
+    last_sent_at: report.last_sent_at?.toISOString?.() ?? null,
+    send_count: report.send_count ?? 0,
     created_at: report.created_at.toISOString(),
     updated_at: report.updated_at.toISOString(),
   };
+}
+
+function sanitizeGeneratedPayloadForPatient(payload: Record<string, unknown>) {
+  const blockedExactKeys = new Set([
+    'latest_risk_summary',
+    'risk_narrative',
+    'risk_drivers',
+    'explainability',
+    'doctor_considerations',
+    'evidence_summary',
+    'risk_snapshot',
+    'top_features',
+  ]);
+
+  const blockedRegex = /(risk|explain|driver|contributor|feature_importance|snapshot)/i;
+  const sanitized: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(payload ?? {})) {
+    if (blockedExactKeys.has(key) || blockedRegex.test(key)) continue;
+
+    if (key === 'patient_metrics_context' && Array.isArray(value)) {
+      sanitized[key] = value.filter((line) => !/risk/i.test(String(line)));
+      continue;
+    }
+
+    sanitized[key] = value;
+  }
+
+  return sanitized;
 }
 
 async function getDoctorByUserId(userId: string) {
@@ -327,6 +364,9 @@ async function getAccessibleUploadedReport(
     const patient = await requirePatientForUser(userId);
     if (report.patient_id.toString() !== patient.id) {
       throw new ReportModuleError(StatusCodes.FORBIDDEN, 'Forbidden');
+    }
+    if (!report.is_sent_to_patient) {
+      throw new ReportModuleError(StatusCodes.FORBIDDEN, 'This report is not shared with the patient');
     }
     return report;
   }
@@ -513,10 +553,10 @@ async function createGeneratedReportRecord(args: {
     generated_at: new Date(),
     generated_by: 'system',
     source_reference: args.sourceReference,
-    is_sent_to_patient: true,
-    sent_to_patient_at: new Date(),
-    last_sent_at: new Date(),
-    send_count: 1,
+    is_sent_to_patient: false,
+    sent_to_patient_at: null,
+    last_sent_at: null,
+    send_count: 0,
   });
 
   await ensureGeneratedPdf(report);
@@ -689,8 +729,19 @@ export async function generatePatientOverviewReport(userId: string, patientId: s
 
 export async function listGeneratedReportsForPatient(userId: string) {
   const patient = await requirePatientForUser(userId);
-  const items = await Report.find({ patient_id: patient._id }).sort({ created_at: -1 });
-  return { items: items.map(mapGeneratedReport) };
+  const items = await Report.find({
+    patient_id: patient._id,
+    is_sent_to_patient: true,
+  }).sort({ created_at: -1 });
+  return {
+    items: items.map((item) => {
+      const mapped = mapGeneratedReport(item);
+      return {
+        ...mapped,
+        structured_payload: sanitizeGeneratedPayloadForPatient(mapped.structured_payload),
+      };
+    }),
+  };
 }
 
 export async function listGeneratedReportsForDoctorPatient(userId: string, patientId: string) {
@@ -706,7 +757,14 @@ export async function getGeneratedReportById(
   userId: string,
   reportId: string,
 ) {
-  return mapGeneratedReport(await getAccessibleGeneratedReport(userRole, userId, reportId));
+  const mapped = mapGeneratedReport(await getAccessibleGeneratedReport(userRole, userId, reportId));
+  if (userRole === 'patient') {
+    return {
+      ...mapped,
+      structured_payload: sanitizeGeneratedPayloadForPatient(mapped.structured_payload),
+    };
+  }
+  return mapped;
 }
 
 export async function getGeneratedReportFile(
@@ -748,4 +806,16 @@ export async function getDoctorPatientReportsOverview(userId: string, patientId:
     uploaded_reports: uploaded.items,
     generated_reports: generated.items,
   };
+}
+
+export async function shareGeneratedReportToPatient(userId: string, reportId: string) {
+  const report = await getAccessibleGeneratedReport('doctor', userId, reportId);
+  report.is_sent_to_patient = true;
+  if (!report.sent_to_patient_at) {
+    report.sent_to_patient_at = new Date();
+  }
+  report.last_sent_at = new Date();
+  report.send_count = (report.send_count ?? 0) + 1;
+  await report.save();
+  return mapGeneratedReport(report);
 }

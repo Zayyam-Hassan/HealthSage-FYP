@@ -18,6 +18,7 @@ import {
   listGeneratedReportsForPatient,
   listUploadedReportsForDoctorPatient,
   listUploadedReportsForPatient,
+  shareGeneratedReportToPatient,
   uploadReportForDoctor,
   uploadReportForPatient,
 } from '../services/reportModuleService';
@@ -181,6 +182,14 @@ export async function downloadGeneratedReport(req: Request, res: Response): Prom
     res.setHeader('Content-Type', file.mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${file.fileName}"`);
     res.sendFile(file.path);
+  } catch (error) {
+    handleError(res, error);
+  }
+}
+
+export async function shareGeneratedReport(req: Request, res: Response): Promise<void> {
+  try {
+    res.json(await shareGeneratedReportToPatient(req.user!.sub, req.params.reportId));
   } catch (error) {
     handleError(res, error);
   }

@@ -659,6 +659,8 @@ export function buildPatientCareReportContent(args: {
   latestMedication?: any;
   agentOutputs?: Record<string, unknown>;
   conversationId: string;
+  doctorName?: string | null;
+  doctorSpecialization?: string | null;
 }) {
   const normalized = normalizeReportAgentOutputs(args.agentOutputs);
   const riskData = getRiskData(normalized, args.latestRisk);
@@ -681,9 +683,36 @@ export function buildPatientCareReportContent(args: {
     medicationSuggestions,
     monitoringPlan,
   );
+  const patientDetails = uniqueLines([
+    `Patient name: ${toText(args.patient?.full_name) || 'Unknown patient'}`,
+    args.patient?.patient_id ? `Patient record id: ${args.patient.patient_id}` : '',
+    args.patient?.age ? `Age: ${args.patient.age}` : '',
+    args.patient?.sex ? `Sex: ${args.patient.sex}` : '',
+    Array.isArray(args.patient?.conditions) && args.patient.conditions.length > 0
+      ? `Known conditions: ${args.patient.conditions.join(', ')}`
+      : 'Known conditions: not documented in profile',
+  ]);
+  const doctorLabel = toText(args.doctorName);
+  const doctorSpecialization = toText(args.doctorSpecialization);
+  const doctorDetails = doctorLabel
+    ? uniqueLines([
+        doctorSpecialization
+          ? `Doctor: ${doctorLabel} (${doctorSpecialization})`
+          : `Doctor: ${doctorLabel}`,
+      ])
+    : ['Doctor: Assigned clinician'];
+  const patientMetricsContext = uniqueLines([
+    ...clinicalSnapshot,
+    `Risk context: ${buildRiskSummary(args.patient, riskData, activeConcerns, protectiveFactors)}`,
+    ...activeConcerns.slice(0, 4),
+    ...protectiveFactors.slice(0, 3),
+  ]);
 
   return {
     patient_friendly_title: 'Comprehensive Diabetes Care Report',
+    patient_details: patientDetails,
+    doctor_details: doctorDetails,
+    patient_metrics_context: patientMetricsContext,
     overview: buildOverview(args.patient, riskData, activeConcerns, protectiveFactors),
     latest_risk_summary: buildRiskSummary(args.patient, riskData, activeConcerns, protectiveFactors),
     risk_narrative: buildRiskNarrative(riskData, activeConcerns, protectiveFactors),
@@ -714,39 +743,23 @@ function joinSection(value: unknown, fallback = '') {
 export function buildPatientCarePdfSections(content: Record<string, unknown>): Section[] {
   const sections: Section[] = [
     {
-      heading: 'Overview',
-      body: toText(content.overview) || 'This report summarizes the latest diabetes care picture for the patient.',
+      heading: 'Patient Details',
+      body: joinSection(content.patient_details, 'Patient details are not available.'),
     },
     {
-      heading: 'Risk Summary',
-      body: toText(content.latest_risk_summary) || 'Risk summary not available.',
+      heading: 'Doctor Name',
+      body: joinSection(content.doctor_details, 'Doctor details are not available.'),
     },
     {
-      heading: 'Risk Narrative',
-      body: toText(content.risk_narrative) || '',
-    },
-    {
-      heading: 'Clinical Snapshot',
-      body: joinSection(content.clinical_snapshot, 'Clinical snapshot not available.'),
-    },
-    {
-      heading: 'Protective Factors',
-      body: joinSection(content.protective_factors, ''),
-    },
-    {
-      heading: 'Active Concerns',
-      body: joinSection(content.active_concerns, ''),
-    },
-    {
-      heading: 'Key Risk Drivers',
-      body: joinSection(content.risk_drivers, 'Key risk drivers were not available.'),
+      heading: 'Patient Metrics and Context',
+      body: joinSection(content.patient_metrics_context, 'Patient metrics context is not available.'),
     },
     {
       heading: 'Lifestyle Recommendations',
       body: joinSection(content.lifestyle_suggestions, 'Lifestyle recommendations were not available.'),
     },
     {
-      heading: 'Medication Considerations',
+      heading: 'Medication Recommendations',
       body: joinSection(content.medication_suggestions, 'Medication considerations were not available.'),
     },
     {
@@ -754,16 +767,12 @@ export function buildPatientCarePdfSections(content: Record<string, unknown>): S
       body: joinSection(content.monitoring_plan, 'Monitoring plan not available.'),
     },
     {
-      heading: 'Doctor Considerations',
-      body: joinSection(content.doctor_considerations, ''),
-    },
-    {
-      heading: 'Evidence Summary',
-      body: joinSection(content.evidence_summary, ''),
-    },
-    {
       heading: 'Next Steps',
       body: joinSection(content.next_steps, 'Next steps not available.'),
+    },
+    {
+      heading: 'Doctor Considerations',
+      body: joinSection(content.doctor_considerations, ''),
     },
   ];
 
