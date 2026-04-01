@@ -108,3 +108,14 @@ export async function callChatbotGet(path: string) {
   return res.data;
 }
 
+export async function callDiagnosisIdentifier(doctorQuery: string) {
+  const res = await chatbotClient.post('/chatbot/identify-diagnosis', {
+    doctor_query: doctorQuery,
+  });
+  return res.data as {
+    is_diagnosis_or_assessment?: boolean;
+    confidence?: number;
+    rationale?: string;
+  };
+}
+

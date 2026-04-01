@@ -16,8 +16,9 @@ import { WebView } from 'react-native-webview';
 import AppDialog from '@/components/AppDialog';
 import SuccessPopup from '@/components/SuccessPopup';
 import { colors } from '@/constants/colors';
+import { authService } from '@/services/auth';
 import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
-import { buildAuthorizedReportFileUrl } from '@/utils/reportFileUrl';
+import { buildAuthorizedReportFileUrl, resolveReportFileUrl } from '@/utils/reportFileUrl';
 
 /**
  * Expo Go does not include react-native-pdf native code. The JS module still loads and renders
@@ -95,6 +96,18 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 /** Max PDF size for the PDF.js WebView fallback (loads full file as base64 in memory). */
 const MAX_PDF_JS_FALLBACK_BYTES = 200 * 1024 * 1024;
+
+async function downloadWithAuth(sourcePath: string, destinationPath: string) {
+  const token = await authService.getAccessToken();
+  const resolved = resolveReportFileUrl(sourcePath);
+  const result = await FileSystem.downloadAsync(resolved, destinationPath, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if ((result as any).status && (result as any).status >= 400) {
+    throw new Error(`Download failed with status ${(result as any).status}`);
+  }
+  return result;
+}
 
 function buildPdfJsHtml(base64: string): string {
   const b64Literal = JSON.stringify(base64);
@@ -275,7 +288,7 @@ export default function ReportDocumentViewerScreen() {
             ? '.jpg'
             : '.pdf';
         const dest = `${FileSystem.cacheDirectory}report-${Date.now()}${ext}`;
-        const { uri } = await FileSystem.downloadAsync(authorized, dest);
+        const { uri } = await downloadWithAuth(rawPath, dest);
         cachedFileRef.current = uri;
         if (!cancelled) setPdfUri(uri);
       } catch (e: any) {
@@ -378,8 +391,7 @@ export default function ReportDocumentViewerScreen() {
       if (pdfUri && pdfUri.startsWith('file://')) {
         await FileSystem.copyAsync({ from: pdfUri, to: targetPath });
       } else {
-        const authorized = await buildAuthorizedReportFileUrl(rawPath);
-        await FileSystem.downloadAsync(authorized, targetPath);
+        await downloadWithAuth(rawPath, targetPath);
       }
 
       setDownloadSuccessVisible(true);

@@ -10,6 +10,7 @@ import { RiskPrediction } from '../models/RiskPrediction';
 import { getLatestActiveDoctorTreatmentPlanByPatientId } from '../services/doctorTreatmentService';
 import {
   callChatbot,
+  callDiagnosisIdentifier,
   callRecommendLifestyle,
   callRecommendMedicationForPatient,
   callRiskExplain,
@@ -612,6 +613,10 @@ export async function chatWithHistory(req: Request, res: Response): Promise<void
       .sort({ created_at: 1 })
       .lean();
 
+    const priorDoctorMessageCount = existingMessages.filter(
+      (message) => message.sender_type === 'provider',
+    ).length;
+
     const message_history = existingMessages.map((m) => ({
       role: m.sender_type === 'provider' ? 'user' : 'assistant',
       content: m.body,
@@ -636,24 +641,39 @@ export async function chatWithHistory(req: Request, res: Response): Promise<void
     let agentOutputs: Record<string, unknown> | undefined;
     let responseMode = mode;
     let failed = false;
+    let diagnosisProvidedNow = false;
+    try {
+      const identification = await callDiagnosisIdentifier(body.doctor_query);
+      diagnosisProvidedNow = Boolean(identification?.is_diagnosis_or_assessment);
+    } catch (err) {
+      // If classifier is unavailable, do not block the doctor's workflow.
+      diagnosisProvidedNow = true;
+    }
+    // Enforce diagnosis-first only for the first doctor turn in a conversation.
+    const requiresDiagnosisFirst = priorDoctorMessageCount === 0 && !diagnosisProvidedNow;
 
     try {
-      const fastApiResponse = await callChatbot(
-        '/chatbot/clinical-assistant',
-        fastApiPayload,
-      );
-      finalMessage = fastApiResponse.final_message ?? finalMessage;
-      agentOutputs = fastApiResponse.agent_outputs;
-      responseMode = fastApiResponse.mode ?? mode;
-
-      if (reportRequested) {
-        await createPatientCareSummary(
-          patient.id,
-          resolvedConversationId,
-          agentOutputs,
-          req.user?.sub,
+      if (requiresDiagnosisFirst) {
+        finalMessage =
+          'Before I provide recommendations, please share your clinical diagnosis or current assessment for this patient first. I will then align suggestions to your judgment.';
+      } else {
+        const fastApiResponse = await callChatbot(
+          '/chatbot/clinical-assistant',
+          fastApiPayload,
         );
-        finalMessage = `${finalMessage}\n\nA patient-ready report draft has been created in Reports for your review.`;
+        finalMessage = fastApiResponse.final_message ?? finalMessage;
+        agentOutputs = fastApiResponse.agent_outputs;
+        responseMode = fastApiResponse.mode ?? mode;
+
+        if (reportRequested) {
+          await createPatientCareSummary(
+            patient.id,
+            resolvedConversationId,
+            agentOutputs,
+            req.user?.sub,
+          );
+          finalMessage = `${finalMessage}\n\nA patient-ready report draft has been created in Reports for your review.`;
+        }
       }
     } catch (err: any) {
       failed = true;

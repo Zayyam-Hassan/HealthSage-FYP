@@ -365,7 +365,9 @@ async function getAccessibleUploadedReport(
     if (report.patient_id.toString() !== patient.id) {
       throw new ReportModuleError(StatusCodes.FORBIDDEN, 'Forbidden');
     }
-    if (!report.is_sent_to_patient) {
+    const shouldBeVisibleByDefault =
+      report.uploaded_by_role === 'doctor' && report.category === 'doctor_sent';
+    if (!report.is_sent_to_patient && !shouldBeVisibleByDefault) {
       throw new ReportModuleError(StatusCodes.FORBIDDEN, 'This report is not shared with the patient');
     }
     return report;
@@ -399,6 +401,9 @@ async function getAccessibleGeneratedReport(
     const patient = await requirePatientForUser(userId);
     if (report.patient_id.toString() !== patient.id) {
       throw new ReportModuleError(StatusCodes.FORBIDDEN, 'Forbidden');
+    }
+    if (!report.is_sent_to_patient) {
+      throw new ReportModuleError(StatusCodes.FORBIDDEN, 'This report is not shared with the patient');
     }
     return report;
   }
@@ -435,6 +440,8 @@ export async function uploadReportForPatient(
     file_name: blob.filename,
     mime_type: blob.content_type,
     file_size: blob.size_bytes,
+    is_sent_to_patient: true,
+    sent_to_patient_at: new Date(),
   });
 
   console.info(`[reports] uploaded report created by patient report=${report.id}`);
@@ -466,6 +473,8 @@ export async function uploadReportForDoctor(
     file_name: blob.filename,
     mime_type: blob.content_type,
     file_size: blob.size_bytes,
+    is_sent_to_patient: true,
+    sent_to_patient_at: new Date(),
   });
 
   console.info(`[reports] uploaded report created by doctor report=${report.id} patient=${patient.id}`);
@@ -474,7 +483,13 @@ export async function uploadReportForDoctor(
 
 export async function listUploadedReportsForPatient(userId: string) {
   const patient = await requirePatientForUser(userId);
-  const items = await UploadedReport.find({ patient_id: patient._id }).sort({ created_at: -1 });
+  const items = await UploadedReport.find({
+    patient_id: patient._id,
+    $or: [
+      { is_sent_to_patient: true },
+      { uploaded_by_role: 'doctor', category: 'doctor_sent' },
+    ],
+  }).sort({ created_at: -1 });
   return { items: items.map(mapUploadedReport) };
 }
 

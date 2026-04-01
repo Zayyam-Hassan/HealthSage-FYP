@@ -22,6 +22,8 @@ from app.schemas.chatbot import (
     ChatWithHistoryResponse,
     ConversationSummary,
     ConversationTranscriptResponse,
+    DiagnosisIdentificationRequest,
+    DiagnosisIdentificationResponse,
     PatientConversationListResponse,
     TranscriptMessage,
 )
@@ -29,6 +31,7 @@ from app.schemas.enums import SenderType
 from services.agents.coordinator_agent import CoordinatorAgent
 from services.agents.master_agent import MasterAgent
 from services.agents.patient_context_service import build_patient_session_context
+from services.agents.master_agent import _call_master_llm
 
 router = APIRouter(prefix="/chatbot", tags=["chatbot"])
 
@@ -38,6 +41,50 @@ def _oid(id_str: str) -> ObjectId:
         return ObjectId(id_str)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid ObjectId") from None
+
+
+DIAGNOSIS_IDENTIFICATION_SYSTEM_PROMPT = """You classify a doctor's message.
+
+Task: Determine whether the message clearly contains the doctor's own diagnosis or clinical assessment/impression for a patient.
+
+Return ONLY valid JSON:
+{
+  "is_diagnosis_or_assessment": true or false,
+  "confidence": number between 0 and 1,
+  "rationale": "one short sentence"
+}
+
+Guidance:
+- true when the doctor states or implies their clinical judgment, impression, differential, working/provisional diagnosis, or assessment.
+- false for generic questions, requests for recommendations, or instructions without any judgment.
+"""
+
+
+@router.post("/identify-diagnosis", response_model=DiagnosisIdentificationResponse)
+async def identify_diagnosis(payload: DiagnosisIdentificationRequest):
+    try:
+        raw = await run_in_threadpool(
+            _call_master_llm,
+            DIAGNOSIS_IDENTIFICATION_SYSTEM_PROMPT,
+            payload.doctor_query or "",
+        )
+        import json
+        import re
+
+        text = (raw or "").strip()
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        parsed = json.loads(match.group(0) if match else text)
+        is_diag = bool(parsed.get("is_diagnosis_or_assessment", False))
+        confidence = float(parsed.get("confidence", 0.0) or 0.0)
+        confidence = max(0.0, min(1.0, confidence))
+        rationale = str(parsed.get("rationale", "") or "").strip()
+        return DiagnosisIdentificationResponse(
+            is_diagnosis_or_assessment=is_diag,
+            confidence=confidence,
+            rationale=rationale,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Diagnosis identification failed: {e}") from e
 
 
 @router.get("/patient-context/{patient_id}")

@@ -109,3 +109,15 @@ class ChatWithHistoryResponse(BaseModel):
     message_id_user: Optional[str] = None
     message_id_assistant: Optional[str] = None
     transcript: List[TranscriptMessage] = Field(default_factory=list)
+
+
+class DiagnosisIdentificationRequest(BaseModel):
+    """Classify if a doctor's message includes diagnosis/clinical assessment."""
+    doctor_query: str = Field(..., description="Doctor's free-text message")
+
+
+class DiagnosisIdentificationResponse(BaseModel):
+    """LLM classification result for diagnosis-first gating."""
+    is_diagnosis_or_assessment: bool
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    rationale: str = Field(default="")

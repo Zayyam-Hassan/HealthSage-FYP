@@ -1,4 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -38,6 +39,8 @@ import {
   type UploadedReport,
   type UploadedReportCategory,
 } from '@/services/reports';
+import { buildAuthorizedReportFileUrl } from '@/utils/reportFileUrl';
+import { addAppNotification } from '@/src/shared/services/notificationService';
 import ReportRecordStatusPill from '@/components/ReportRecordStatusPill';
 import MedicalReportHeader from '@/components/MedicalReportHeader';
 import RecordForPatientHeader from '@/components/RecordForPatientHeader';
@@ -173,6 +176,7 @@ export default function ReportsScreen() {
     message: '',
   });
   const [primaryTab, setPrimaryTab] = useState<ReportsPrimaryTab>('view');
+  const [downloadingGeneratedId, setDownloadingGeneratedId] = useState<string | null>(null);
   const [recordTypeFilter, setRecordTypeFilter] = useState<ReportsRecordFilter>('all');
   const insets = useSafeAreaInsets();
 
@@ -404,6 +408,11 @@ export default function ReportsScreen() {
           : 'Your report was uploaded successfully.',
       );
       setShowSuccess(true);
+      await addAppNotification({
+        title: role === 'doctor' ? 'Report shared with patient' : 'Report uploaded',
+        message: `${uploadTitle()} is now available in the reports library.`,
+        type: 'report',
+      });
     } catch (err: any) {
       setError(err.message || 'Unable to upload report');
     } finally {
@@ -448,6 +457,11 @@ export default function ReportsScreen() {
         await reportsService.generateOverview(selectedPatientId);
       }
       await loadData();
+      await addAppNotification({
+        title: 'System report generated',
+        message: 'A new system-generated report is ready for doctor review.',
+        type: 'report',
+      });
     } catch (err: any) {
       setError(err.message || 'Unable to generate report');
     } finally {
@@ -473,6 +487,37 @@ export default function ReportsScreen() {
       pathname: '/reports/[id]',
       params: { id: report.id, kind: 'generated' },
     } as any);
+  };
+
+  const downloadGeneratedReport = async (report: GeneratedReport) => {
+    if (downloadingGeneratedId) return;
+    try {
+      setDownloadingGeneratedId(report.id);
+      const docDir = FileSystem.documentDirectory;
+      if (!docDir) {
+        setError('Could not access local storage for download.');
+        return;
+      }
+      const path = reportsService.getGeneratedReportDownloadPath(report.id);
+      const authorized = await buildAuthorizedReportFileUrl(path);
+      const safeTitle = (report.title || 'generated-report')
+        .replace(/[^\w\d-_]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      const targetPath = `${docDir}${safeTitle || 'generated-report'}-${Date.now()}.pdf`;
+      await FileSystem.downloadAsync(authorized, targetPath);
+      setSuccessMessage('Beautified system report downloaded successfully.');
+      setShowSuccess(true);
+      await addAppNotification({
+        title: 'Report downloaded',
+        message: `${report.title} was downloaded to your device.`,
+        type: 'report',
+      });
+    } catch (err: any) {
+      setError(err?.message || 'Unable to download report');
+    } finally {
+      setDownloadingGeneratedId(null);
+    }
   };
 
   const handleHeaderBack = () => {
@@ -843,7 +888,22 @@ export default function ReportsScreen() {
                               {formatDate(report.created_at)}
                             </Text>
                           </View>
-                          <Ionicons name="chevron-forward" size={18} color={colors.coral.deep} />
+                          <View className="items-end">
+                            <TouchableOpacity
+                              onPress={() => {
+                                void downloadGeneratedReport(report);
+                              }}
+                              disabled={downloadingGeneratedId === report.id}
+                              className="mb-2 rounded-xl bg-coral-soft px-3 py-2"
+                            >
+                              {downloadingGeneratedId === report.id ? (
+                                <Text className="text-xs font-semibold text-coral-ink">Downloading...</Text>
+                              ) : (
+                                <Ionicons name="download-outline" size={18} color={colors.coral.deep} />
+                              )}
+                            </TouchableOpacity>
+                            <Ionicons name="chevron-forward" size={18} color={colors.coral.deep} />
+                          </View>
                         </View>
                       </TouchableOpacity>
                     ))}

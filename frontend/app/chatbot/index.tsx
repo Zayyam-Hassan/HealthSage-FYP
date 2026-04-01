@@ -303,7 +303,7 @@ function buildIntroMessage(patientLabel?: string): Message {
   return {
     id: 'intro',
     text: patientLabel
-      ? `Ready for a new conversation for ${patientLabel}. Use New chat to start fresh, or open a previous session from the sidebar to continue earlier guidance.`
+      ? `Ready for a new conversation for ${patientLabel}. Please share your diagnosis/clinical assessment first, then I will provide support aligned to your judgment. Use New chat to start fresh, or open a previous session from the sidebar to continue earlier guidance.`
       : 'Hello. Select a patient to open a clinical conversation.',
     sender: 'bot',
     timestamp: new Date(),

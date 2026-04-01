@@ -1,166 +1,140 @@
 import fs from 'fs';
 import path from 'path';
+import PDFDocument from 'pdfkit';
 
 type ReportSection = {
   heading: string;
   body: string;
 };
 
-type PageLine = {
-  x: number;
-  y: number;
-  fontSize: number;
-  text: string;
-};
-
-function escapePdfText(value: string) {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/\(/g, '\\(')
-    .replace(/\)/g, '\\)');
-}
-
-function wrapText(text: string, maxChars = 82) {
-  const paragraphs = text
+function toParagraphs(text: string) {
+  return text
     .split('\n')
-    .map((paragraph) => paragraph.replace(/\s+/g, ' ').trim())
+    .map((line) => line.trim())
     .filter(Boolean);
-
-  if (paragraphs.length === 0) {
-    return [''];
-  }
-
-  const lines: string[] = [];
-  for (const paragraph of paragraphs) {
-    const words = paragraph.split(' ');
-    let current = '';
-
-    for (const word of words) {
-      const candidate = current ? `${current} ${word}` : word;
-      if (candidate.length <= maxChars) {
-        current = candidate;
-      } else {
-        if (current) {
-          lines.push(current);
-        }
-        current = word;
-      }
-    }
-
-    if (current) {
-      lines.push(current);
-    }
-  }
-
-  return lines.length > 0 ? lines : [''];
 }
 
-function paginateContent(title: string, sections: ReportSection[]) {
-  const pages: PageLine[][] = [];
-  let currentPage: PageLine[] = [];
-  let y = 760;
-
-  const startNewPage = () => {
-    currentPage = [];
-    pages.push(currentPage);
-    y = 760;
-
-    currentPage.push({
-      x: 50,
-      y,
-      fontSize: 20,
-      text: title,
+async function buildPdfBuffer(title: string, sections: ReportSection[]) {
+  return await new Promise<Buffer>((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 48,
+      bufferPages: true,
+      info: {
+        Title: title,
+        Author: 'HealthSage Assistant',
+        Subject: 'Patient care report',
+      },
     });
-    y -= 32;
-  };
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
 
-  startNewPage();
+    const pageW = doc.page.width;
+    const left = doc.page.margins.left;
+    const right = doc.page.width - doc.page.margins.right;
+    const contentWidth = right - left;
 
-  for (const section of sections) {
-    if (y < 100) {
-      startNewPage();
-    }
+    doc
+      .fillColor('#E66A6A')
+      .roundedRect(left, 42, contentWidth, 70, 12)
+      .fill();
 
-    currentPage.push({
-      x: 50,
-      y,
-      fontSize: 13,
-      text: section.heading,
-    });
-    y -= 20;
-
-    const lines = wrapText(section.body);
-    for (const line of lines) {
-      if (y < 60) {
-        startNewPage();
-      }
-
-      currentPage.push({
-        x: 58,
-        y,
-        fontSize: 11,
-        text: line,
+    doc
+      .fillColor('#FFFFFF')
+      .font('Helvetica-Bold')
+      .fontSize(19)
+      .text(title, left + 16, 58, { width: contentWidth - 32, align: 'left' })
+      .font('Helvetica')
+      .fontSize(10)
+      .text(`Generated on ${new Date().toLocaleString()}`, left + 16, 86, {
+        width: contentWidth - 32,
       });
-      y -= 16;
+
+    doc.moveDown(5);
+
+    sections.forEach((section, index) => {
+      if (doc.y > doc.page.height - 130) {
+        doc.addPage();
+      }
+
+      doc
+        .fillColor('#E66A6A')
+        .roundedRect(left, doc.y, contentWidth, 24, 8)
+        .fill();
+
+      doc
+        .fillColor('#FFFFFF')
+        .font('Helvetica-Bold')
+        .fontSize(12)
+        .text(section.heading, left + 12, doc.y + 7, {
+          width: contentWidth - 24,
+          lineBreak: false,
+        });
+
+      doc.y += 32;
+
+      const paragraphs = toParagraphs(section.body);
+      if (paragraphs.length === 0) {
+        doc
+          .fillColor('#334155')
+          .font('Helvetica')
+          .fontSize(11)
+          .text('No additional details provided.', left + 8, doc.y, {
+            width: contentWidth - 16,
+            lineGap: 2,
+          });
+      } else {
+        paragraphs.forEach((paragraph) => {
+          const isBullet = /^[-*]\s+/.test(paragraph) || /^•\s+/.test(paragraph);
+          if (isBullet) {
+            const bulletText = paragraph.replace(/^[-*•]\s+/, '').trim();
+            doc
+              .fillColor('#0F172A')
+              .font('Helvetica')
+              .fontSize(11)
+              .text('•', left + 10, doc.y, { continued: true })
+              .text(` ${bulletText}`, {
+                width: contentWidth - 30,
+                align: 'left',
+                lineGap: 2,
+              });
+          } else {
+            doc
+              .fillColor('#0F172A')
+              .font('Helvetica')
+              .fontSize(11)
+              .text(paragraph, left + 8, doc.y, {
+                width: contentWidth - 16,
+                align: 'justify',
+                lineGap: 2,
+              });
+          }
+          doc.moveDown(0.4);
+        });
+      }
+
+      if (index < sections.length - 1) {
+        doc.moveDown(0.8);
+      }
+    });
+
+    const pageCount = doc.bufferedPageRange().count;
+    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+      doc.switchToPage(pageIndex);
+      doc
+        .fillColor('#64748B')
+        .font('Helvetica')
+        .fontSize(9)
+        .text(`Page ${pageIndex + 1} of ${pageCount}`, left, doc.page.height - 34, {
+          width: contentWidth,
+          align: 'right',
+        });
     }
 
-    y -= 8;
-  }
-
-  return pages;
-}
-
-function buildContentStream(lines: PageLine[]) {
-  return lines
-    .map((line) => [
-      'BT',
-      `/F1 ${line.fontSize} Tf`,
-      `${line.x} ${line.y} Td`,
-      `(${escapePdfText(line.text)}) Tj`,
-      'ET',
-    ].join('\n'))
-    .join('\n');
-}
-
-function buildPdfBuffer(title: string, sections: ReportSection[]) {
-  const pageStreams = paginateContent(title, sections).map((page) => buildContentStream(page));
-  const pageCount = pageStreams.length;
-  const fontObjectId = 3 + pageCount * 2;
-
-  const objects: string[] = [];
-  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
-
-  const kidRefs: string[] = [];
-  for (let index = 0; index < pageCount; index += 1) {
-    const pageObjectId = 3 + index * 2;
-    const contentObjectId = pageObjectId + 1;
-    kidRefs.push(`${pageObjectId} 0 R`);
-
-    objects[pageObjectId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontObjectId} 0 R >> >> /Contents ${contentObjectId} 0 R >>`;
-    const stream = pageStreams[index];
-    objects[contentObjectId] = `<< /Length ${Buffer.byteLength(stream, 'utf8')} >> stream\n${stream}\nendstream`;
-  }
-
-  objects[2] = `<< /Type /Pages /Kids [${kidRefs.join(' ')}] /Count ${pageCount} >>`;
-  objects[fontObjectId] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
-
-  const header = '%PDF-1.4\n';
-  let body = '';
-  const offsets: string[] = ['0000000000 65535 f '];
-  let offset = Buffer.byteLength(header, 'utf8');
-
-  for (let objectId = 1; objectId < objects.length; objectId += 1) {
-    const objectContent = `${objectId} 0 obj ${objects[objectId]} endobj\n`;
-    offsets[objectId] = `${offset.toString().padStart(10, '0')} 00000 n `;
-    body += objectContent;
-    offset += Buffer.byteLength(objectContent, 'utf8');
-  }
-
-  const xrefOffset = offset;
-  const xref = `xref\n0 ${objects.length}\n${offsets.join('\n')}\n`;
-  const trailer = `trailer << /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-
-  return Buffer.from(`${header}${body}${xref}${trailer}`, 'utf8');
+    doc.end();
+  });
 }
 
 export async function writeReportPdf(
@@ -171,6 +145,7 @@ export async function writeReportPdf(
   const reportsDir = path.join(process.cwd(), 'generated-reports');
   await fs.promises.mkdir(reportsDir, { recursive: true });
   const filePath = path.join(reportsDir, `${reportId}.pdf`);
-  await fs.promises.writeFile(filePath, buildPdfBuffer(title, sections));
+  const buffer = await buildPdfBuffer(title, sections);
+  await fs.promises.writeFile(filePath, buffer);
   return filePath;
 }

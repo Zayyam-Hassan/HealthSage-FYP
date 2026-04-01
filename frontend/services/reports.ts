@@ -127,6 +127,10 @@ class ReportsService {
     return apiClient.post<GeneratedReport>(`${BASE}/generated/${reportId}/share`, {});
   }
 
+  getGeneratedReportDownloadPath(reportId: string): string {
+    return `${BASE}/generated/${reportId}/file`;
+  }
+
   async getPatientReportsOverview(): Promise<ReportOverviewResponse> {
     return apiClient.get<ReportOverviewResponse>(`${BASE}/patient/overview`);
   }

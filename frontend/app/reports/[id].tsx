@@ -23,6 +23,7 @@ import {
   type GeneratedReport,
   type UploadedReport,
 } from '@/services/reports';
+import { addAppNotification } from '@/src/shared/services/notificationService';
 
 type SectionGroup = 'all' | 'profile' | 'recommendations' | 'monitoring';
 
@@ -338,6 +339,11 @@ export default function ReportDetailsScreen() {
                             setSharing(true);
                             const updated = await reportsService.shareGeneratedReport(generatedReport.id);
                             setGeneratedReport(updated);
+                            await addAppNotification({
+                              title: 'Report shared to patient',
+                              message: `${updated.title} is now visible to the patient.`,
+                              type: 'report',
+                            });
                           } finally {
                             setSharing(false);
                           }

@@ -21,6 +21,8 @@ export interface UploadedReportDocument extends Document {
   file_name: string;
   mime_type: string;
   file_size?: number;
+  is_sent_to_patient?: boolean;
+  sent_to_patient_at?: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -67,6 +69,8 @@ const UploadedReportSchema = new Schema<UploadedReportDocument>(
     file_name: { type: String, required: true },
     mime_type: { type: String, required: true },
     file_size: { type: Number },
+    is_sent_to_patient: { type: Boolean, default: false, index: true },
+    sent_to_patient_at: { type: Date, default: null },
     created_at: { type: Date, default: () => new Date() },
     updated_at: { type: Date, default: () => new Date() },
   },

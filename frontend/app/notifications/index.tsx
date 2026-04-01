@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, ScrollView, Text, TouchableOpacity, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,80 +6,58 @@ import Header from '@/components/Header';
 import Card from '@/components/Card';
 import { colors } from '@/constants/colors';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
+import {
+  addAppNotification,
+  getPushEnabled,
+  getStoredNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  setPushEnabled,
+  type AppNotificationItem,
+} from '@/src/shared/services/notificationService';
 
 type IonIcon = React.ComponentProps<typeof Ionicons>['name'];
 
-interface NotificationItem {
-  id: string;
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
-  type: 'appointment' | 'report' | 'reminder' | 'general';
-}
-
 export default function NotificationsScreen() {
-  const { role } = useAuth();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: '1',
-      title: 'Appointment Reminder',
-      message: 'Your appointment with Dr. Sarah Johnson is scheduled for tomorrow at 10:00 AM',
-      time: '2 hours ago',
-      read: false,
-      type: 'appointment',
-    },
-    {
-      id: '2',
-      title: 'New Report Available',
-      message: 'Your health assessment report is now available for review',
-      time: '5 hours ago',
-      read: false,
-      type: 'report',
-    },
-    {
-      id: '3',
-      title: 'Appointment Confirmed',
-      message: 'Your appointment with Dr. Michael Chen has been confirmed for March 15, 2024',
-      time: '1 day ago',
-      read: true,
-      type: 'appointment',
-    },
-    {
-      id: '4',
-      title: 'Health Tips',
-      message: 'Remember to stay hydrated and get at least 8 hours of sleep',
-      time: '2 days ago',
-      read: true,
-      type: 'general',
-    },
-    {
-      id: '5',
-      title: 'Medication Reminder',
-      message: 'Don\'t forget to take your prescribed medication',
-      time: '3 days ago',
-      read: true,
-      type: 'reminder',
-    },
-  ]);
-
-  const [pushEnabled, setPushEnabled] = useState(true);
+  useAuth();
+  const [notifications, setNotifications] = useState<AppNotificationItem[]>([]);
+  const [pushEnabled, setPushEnabledState] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(false);
 
-  const markAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((notif) =>
-        notif.id === id ? { ...notif, read: true } : notif
-      )
-    );
+  const reloadNotifications = async () => {
+    setNotifications(await getStoredNotifications());
   };
 
-  const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((notif) => ({ ...notif, read: true })));
+  useEffect(() => {
+    (async () => {
+      setPushEnabledState(await getPushEnabled());
+      await reloadNotifications();
+    })();
+  }, []);
+
+  const formatRelativeTime = (createdAt: string) => {
+    const deltaMs = Date.now() - new Date(createdAt).getTime();
+    const minutes = Math.floor(deltaMs / 60000);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
   };
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const markAsRead = async (id: string) => {
+    await markNotificationRead(id);
+    await reloadNotifications();
+  };
+
+  const markAllAsRead = async () => {
+    await markAllNotificationsRead();
+    await reloadNotifications();
+  };
+
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
   const getNotificationIconName = (type: string): IonIcon => {
     switch (type) {
@@ -123,7 +101,10 @@ export default function NotificationsScreen() {
               </View>
               <Switch
                 value={pushEnabled}
-                onValueChange={setPushEnabled}
+                onValueChange={(v) => {
+                  setPushEnabledState(v);
+                  setPushEnabled(v).catch(() => undefined);
+                }}
                 trackColor={{ false: colors.border.light, true: colors.primary.light }}
                 thumbColor={colors.background.primary}
               />
@@ -171,12 +152,24 @@ export default function NotificationsScreen() {
             Recent notifications
           </Text>
           {unreadCount > 0 && (
-            <TouchableOpacity onPress={markAllAsRead}>
+            <TouchableOpacity onPress={() => void markAllAsRead()}>
               <Text className="text-sm text-primary font-medium">
                 Mark all as read
               </Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity
+            onPress={() => {
+              void addAppNotification({
+                title: 'HealthSage test notification',
+                message: 'Push notifications are enabled and working on this device.',
+                type: 'general',
+                triggerPhoneNotification: true,
+              }).then(reloadNotifications);
+            }}
+          >
+            <Text className="text-sm text-primary font-medium">Send test</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Notifications List */}
@@ -228,7 +221,7 @@ export default function NotificationsScreen() {
                         {notification.message}
                       </Text>
                       <Text className="text-xs text-text-tertiary">
-                        {notification.time}
+                        {formatRelativeTime(notification.createdAt)}
                       </Text>
                     </View>
                   </View>
