@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './config';
+import { getApiBaseUrl, initializeApiConfig, refreshApiConfig } from './config';
 
 export interface ApiError {
   message: string;
@@ -13,16 +13,19 @@ export function setAccessToken(token: string | null): void {
 }
 
 class ApiClient {
-  private baseURL: string;
+  private getBaseURL: () => string;
 
-  constructor(baseURL: string) {
-    this.baseURL = baseURL;
+  constructor(getBaseURL: () => string) {
+    this.getBaseURL = getBaseURL;
   }
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    hasRetriedAfterRefresh = false,
   ): Promise<T> {
+    await initializeApiConfig();
+
     const headers: HeadersInit =
       accessToken || options.headers
         ? {
@@ -34,7 +37,7 @@ class ApiClient {
             'Content-Type': 'application/json',
           };
 
-    const url = `${this.baseURL}${endpoint}`;
+    const url = `${this.getBaseURL()}${endpoint}`;
     
     try {
       if (__DEV__) {
@@ -72,6 +75,10 @@ class ApiClient {
 
       return data;
     } catch (error) {
+      if (error instanceof Error && !hasRetriedAfterRefresh) {
+        await refreshApiConfig();
+        return this.request<T>(endpoint, options, true);
+      }
       if (error instanceof Error) {
         throw {
           message: `Unable to reach backend at ${url}. ${error.message}`,
@@ -107,9 +114,12 @@ class ApiClient {
     });
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+  async delete<T>(endpoint: string, data?: any): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'DELETE',
+      body: data ? JSON.stringify(data) : undefined,
+    });
   }
 }
 
-export const apiClient = new ApiClient(API_BASE_URL);
+export const apiClient = new ApiClient(getApiBaseUrl);

@@ -8,6 +8,10 @@ import {
 } from '../models/DoctorAssignmentRequest';
 import { Patient } from '../models/Patient';
 import { User } from '../models/User';
+import {
+  createNotificationForDoctorProfile,
+  createNotificationForPatientProfile,
+} from '../services/notificationsService';
 import { buildPatientPayload } from '../utils/patientProfile';
 
 async function getDoctorByUser(userId: string) {
@@ -256,6 +260,18 @@ export async function requestDoctorAssignment(
       typeof req.body?.note === 'string' ? req.body.note.trim() : undefined,
   });
 
+  await createNotificationForDoctorProfile(doctor._id, {
+    type: 'doctor_assignment_request',
+    title: 'New patient assignment request',
+    message: `${patient.full_name} requested to connect with you.`,
+    href: '/patients',
+    data: {
+      patient_id: patient.id,
+      doctor_id: doctor.id,
+      request_id: request.id,
+    },
+  }).catch(() => null);
+
   res.status(StatusCodes.CREATED).json({
     id: request.id,
     status: request.status,
@@ -390,6 +406,25 @@ export async function respondToAssignmentRequest(
       },
     );
   }
+
+  await createNotificationForPatientProfile(patient._id, {
+    type: 'doctor_assignment_update',
+    title:
+      nextStatus === 'accepted'
+        ? 'Doctor request accepted'
+        : 'Doctor request declined',
+    message:
+      nextStatus === 'accepted'
+        ? `${doctor.name} accepted your assignment request.`
+        : `${doctor.name} declined your assignment request.`,
+    href: '/patients',
+    data: {
+      patient_id: patient.id,
+      doctor_id: doctor.id,
+      request_id: request.id,
+      status: nextStatus,
+    },
+  }).catch(() => null);
 
   res.json({
     id: request.id,

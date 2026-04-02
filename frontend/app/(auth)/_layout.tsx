@@ -6,7 +6,7 @@ export default function AuthLayout() {
       screenOptions={{
         headerShown: false,
       }}
-      initialRouteName="signup"
+      initialRouteName="login"
     >
       <Stack.Screen name="signup" />
       <Stack.Screen name="login" />
@@ -14,4 +14,3 @@ export default function AuthLayout() {
     </Stack>
   );
 }
-

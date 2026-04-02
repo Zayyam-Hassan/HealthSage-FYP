@@ -40,7 +40,6 @@ import {
   type UploadedReportCategory,
 } from '@/services/reports';
 import { buildAuthorizedReportFileUrl } from '@/utils/reportFileUrl';
-import { addAppNotification } from '@/src/shared/services/notificationService';
 import ReportRecordStatusPill from '@/components/ReportRecordStatusPill';
 import MedicalReportHeader from '@/components/MedicalReportHeader';
 import RecordForPatientHeader from '@/components/RecordForPatientHeader';
@@ -408,11 +407,6 @@ export default function ReportsScreen() {
           : 'Your report was uploaded successfully.',
       );
       setShowSuccess(true);
-      await addAppNotification({
-        title: role === 'doctor' ? 'Report shared with patient' : 'Report uploaded',
-        message: `${uploadTitle()} is now available in the reports library.`,
-        type: 'report',
-      });
     } catch (err: any) {
       setError(err.message || 'Unable to upload report');
     } finally {
@@ -457,11 +451,6 @@ export default function ReportsScreen() {
         await reportsService.generateOverview(selectedPatientId);
       }
       await loadData();
-      await addAppNotification({
-        title: 'System report generated',
-        message: 'A new system-generated report is ready for doctor review.',
-        type: 'report',
-      });
     } catch (err: any) {
       setError(err.message || 'Unable to generate report');
     } finally {
@@ -508,11 +497,6 @@ export default function ReportsScreen() {
       await FileSystem.downloadAsync(authorized, targetPath);
       setSuccessMessage('Beautified system report downloaded successfully.');
       setShowSuccess(true);
-      await addAppNotification({
-        title: 'Report downloaded',
-        message: `${report.title} was downloaded to your device.`,
-        type: 'report',
-      });
     } catch (err: any) {
       setError(err?.message || 'Unable to download report');
     } finally {

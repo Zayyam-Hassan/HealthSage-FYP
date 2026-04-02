@@ -18,6 +18,7 @@ import Card from '@/components/Card';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { appointmentsService, type Appointment } from '@/services/appointments';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
+import { useUnreadNotificationCount } from '@/src/shared/hooks/useUnreadNotificationCount';
 import {
   doctorsService,
   type Doctor,
@@ -65,6 +66,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, role: userRole, refreshUser, isLoading: authLoading } = useAuth();
+  const { count: unreadNotifications } = useUnreadNotificationCount();
   const userDisplayName = user?.display_name?.trim() ?? '';
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [popularDoctors, setPopularDoctors] = useState<Doctor[]>([]);
@@ -165,14 +167,41 @@ export default function HomeScreen() {
             resizeMode="contain"
           />
           <View className="px-6 pt-7 pb-9">
+            <View className="mb-4 flex-row items-center justify-between">
+              <Text
+                className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/75"
+                accessibilityRole="text"
+              >
+                {userRole === 'doctor' ? 'Clinician workspace' : 'Your care'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push('/notifications' as any)}
+                activeOpacity={0.88}
+                accessibilityRole="button"
+                accessibilityLabel="Notifications"
+                className="relative"
+              >
+                <View className="h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-sm">
+                  <Ionicons
+                    name="notifications-outline"
+                    size={22}
+                    color={colors.coral.deep}
+                  />
+                </View>
+                {unreadNotifications > 0 ? (
+                  <View
+                    className="absolute -right-1 -top-1 min-w-[22px] rounded-full px-1.5 py-1 items-center justify-center"
+                    style={{ backgroundColor: colors.coral.deep }}
+                  >
+                    <Text className="text-[11px] font-bold text-white">
+                      {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                    </Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            </View>
             <View className="flex-row items-end justify-between">
               <View className="flex-1 min-w-0 pr-3">
-                <Text
-                  className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/75 mb-1"
-                  accessibilityRole="text"
-                >
-                  {userRole === 'doctor' ? 'Clinician workspace' : 'Your care'}
-                </Text>
                 <Text
                   className="text-[26px] font-bold leading-8 mb-2 tracking-tight"
                   style={{ color: colors.text.inverse }}

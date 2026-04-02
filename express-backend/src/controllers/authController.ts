@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Doctor } from '../models/Doctor';
 import { Patient } from '../models/Patient';
 import { User } from '../models/User';
+import { createWelcomeNotificationForUser } from '../services/notificationsService';
 import { signAccessToken } from '../utils/jwt';
 import type { UserRole } from '../types/roles';
 
@@ -114,6 +115,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
     display_name: user.display_name,
     role: user.role,
   });
+  await createWelcomeNotificationForUser(user.id).catch(() => null);
 
   const authUser = toAuthUser({
     id: user.id,

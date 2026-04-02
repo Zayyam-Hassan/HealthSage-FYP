@@ -1,232 +1,170 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, Text, TouchableOpacity, Switch } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  ScrollView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import Header from '@/components/Header';
 import Card from '@/components/Card';
 import { colors } from '@/constants/colors';
-import { useAuth } from '@/src/features/auth/hooks/useAuth';
+import { sendTestNotification } from '@/services/notifications';
+import { presentTestNotificationOnDevice } from '@/src/shared/services/localNotifications';
 import {
-  addAppNotification,
-  getPushEnabled,
-  getStoredNotifications,
-  markAllNotificationsRead,
-  markNotificationRead,
-  setPushEnabled,
-  type AppNotificationItem,
-} from '@/src/shared/services/notificationService';
+  loadCachedNotifications,
+  prependNotification,
+  markCachedNotificationRead,
+  subscribeInbox,
+  type CachedNotificationItem,
+} from '@/src/shared/services/notificationInboxStorage';
 
-type IonIcon = React.ComponentProps<typeof Ionicons>['name'];
+function formatRelativeTime(iso: string) {
+  const deltaMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(deltaMs / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
 
 export default function NotificationsScreen() {
-  useAuth();
-  const [notifications, setNotifications] = useState<AppNotificationItem[]>([]);
-  const [pushEnabled, setPushEnabledState] = useState(true);
-  const [emailEnabled, setEmailEnabled] = useState(true);
-  const [smsEnabled, setSmsEnabled] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<CachedNotificationItem[]>([]);
+  const [lastError, setLastError] = useState<string | null>(null);
 
-  const reloadNotifications = async () => {
-    setNotifications(await getStoredNotifications());
-  };
-
-  useEffect(() => {
-    (async () => {
-      setPushEnabledState(await getPushEnabled());
-      await reloadNotifications();
-    })();
+  const reloadFromStorage = useCallback(async () => {
+    setItems(await loadCachedNotifications());
   }, []);
 
-  const formatRelativeTime = (createdAt: string) => {
-    const deltaMs = Date.now() - new Date(createdAt).getTime();
-    const minutes = Math.floor(deltaMs / 60000);
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes} min ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
-    const days = Math.floor(hours / 24);
-    return `${days} day${days === 1 ? '' : 's'} ago`;
-  };
+  useEffect(() => {
+    void reloadFromStorage();
+    return subscribeInbox(() => {
+      void reloadFromStorage();
+    });
+  }, [reloadFromStorage]);
 
-  const markAsRead = async (id: string) => {
-    await markNotificationRead(id);
-    await reloadNotifications();
-  };
+  const onPressNotification = useCallback(
+    async (id: string) => {
+      await markCachedNotificationRead(id);
+      await reloadFromStorage();
+    },
+    [reloadFromStorage],
+  );
 
-  const markAllAsRead = async () => {
-    await markAllNotificationsRead();
-    await reloadNotifications();
-  };
-
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
-
-  const getNotificationIconName = (type: string): IonIcon => {
-    switch (type) {
-      case 'appointment':
-        return 'calendar-outline';
-      case 'report':
-        return 'document-text-outline';
-      case 'reminder':
-        return 'alarm-outline';
-      default:
-        return 'notifications-outline';
+  const onSendTest = async () => {
+    setLoading(true);
+    setLastError(null);
+    try {
+      const item = await sendTestNotification();
+      const next = await prependNotification(item);
+      setItems(next);
+      await presentTestNotificationOnDevice({
+        title: item.title,
+        body: item.message,
+        notificationId: item.id,
+      });
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Request failed';
+      setLastError(msg);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
-      <Header
-        variant="coral"
-        title="Notifications"
-        showBack
-      />
+      <Header variant="coral" title="Notifications" showBack />
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 32 }}
       >
-        {/* Notification Settings */}
-        <View className="px-6 pt-6 pb-2">
-          <Card className="border-border/80 shadow-sm">
-            <Text className="text-lg font-semibold text-text mb-4 tracking-tight">
-              Notification settings
+        <View className="px-6 pt-8">
+          <Card className="border-border/80 shadow-sm p-6 mb-6">
+            <Text className="text-base text-text-secondary mb-4 leading-6">
+              The server creates a notification record; we save a copy on this device (AsyncStorage)
+              and show the same content as a system notification — no remote push required.
             </Text>
-
-            <View className="flex-row items-center justify-between mb-4 pb-4 border-b border-border/80">
-              <View className="flex-1">
-                <Text className="text-base font-medium text-text mb-1">
-                  Push Notifications
+            <TouchableOpacity
+              onPress={() => void onSendTest()}
+              disabled={loading}
+              activeOpacity={0.85}
+              className="rounded-2xl bg-primary py-4 items-center justify-center min-h-[52px]"
+            >
+              {loading ? (
+                <ActivityIndicator color={colors.primary.contrast} />
+              ) : (
+                <Text
+                  className="text-base font-semibold"
+                  style={{ color: colors.primary.contrast }}
+                >
+                  Send test notification
                 </Text>
-                <Text className="text-sm text-text-secondary">
-                  Receive notifications on your device
-                </Text>
-              </View>
-              <Switch
-                value={pushEnabled}
-                onValueChange={(v) => {
-                  setPushEnabledState(v);
-                  setPushEnabled(v).catch(() => undefined);
-                }}
-                trackColor={{ false: colors.border.light, true: colors.primary.light }}
-                thumbColor={colors.background.primary}
-              />
-            </View>
-
-            <View className="flex-row items-center justify-between mb-4 pb-4 border-b border-border/80">
-              <View className="flex-1">
-                <Text className="text-base font-medium text-text mb-1">
-                  Email Notifications
-                </Text>
-                <Text className="text-sm text-text-secondary">
-                  Receive notifications via email
-                </Text>
-              </View>
-              <Switch
-                value={emailEnabled}
-                onValueChange={setEmailEnabled}
-                trackColor={{ false: colors.border.light, true: colors.primary.light }}
-                thumbColor={colors.background.primary}
-              />
-            </View>
-
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1">
-                <Text className="text-base font-medium text-text mb-1">
-                  SMS Notifications
-                </Text>
-                <Text className="text-sm text-text-secondary">
-                  Receive notifications via SMS
-                </Text>
-              </View>
-              <Switch
-                value={smsEnabled}
-                onValueChange={setSmsEnabled}
-                trackColor={{ false: colors.border.light, true: colors.primary.light }}
-                thumbColor={colors.background.primary}
-              />
-            </View>
-          </Card>
-        </View>
-
-        {/* Notifications List Header */}
-        <View className="px-6 pt-4 pb-2 flex-row items-center justify-between">
-          <Text className="text-lg font-semibold text-text tracking-tight">
-            Recent notifications
-          </Text>
-          {unreadCount > 0 && (
-            <TouchableOpacity onPress={() => void markAllAsRead()}>
-              <Text className="text-sm text-primary font-medium">
-                Mark all as read
-              </Text>
+              )}
             </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            onPress={() => {
-              void addAppNotification({
-                title: 'HealthSage test notification',
-                message: 'Push notifications are enabled and working on this device.',
-                type: 'general',
-                triggerPhoneNotification: true,
-              }).then(reloadNotifications);
-            }}
-          >
-            <Text className="text-sm text-primary font-medium">Send test</Text>
-          </TouchableOpacity>
-        </View>
+            {lastError ? (
+              <Text className="text-sm text-error mt-4 leading-5">{lastError}</Text>
+            ) : null}
+          </Card>
 
-        {/* Notifications List */}
-        <View className="px-6 pt-2">
-          {notifications.length === 0 ? (
+          <Text className="text-lg font-semibold text-text mb-3 px-1 tracking-tight">
+            On this device
+          </Text>
+          {items.length === 0 ? (
             <Card className="py-10 items-center border-border/80 bg-bg-card">
               <View className="w-14 h-14 rounded-2xl bg-primary/10 items-center justify-center mb-4 border border-primary/10">
                 <Ionicons name="notifications-outline" size={28} color={colors.primary.main} />
               </View>
-              <Text className="text-base font-semibold text-text mb-1">No notifications yet</Text>
+              <Text className="text-base font-semibold text-text mb-1">Nothing cached yet</Text>
               <Text className="text-sm text-text-secondary text-center px-4 leading-5">
-                Alerts for appointments and reports will appear here.
+                Send a test to store one here and trigger the OS banner.
               </Text>
             </Card>
           ) : (
-            notifications.map((notification, index) => (
-              <TouchableOpacity
-                key={notification.id}
-                onPress={() => markAsRead(notification.id)}
-                activeOpacity={0.7}
+            items.map((n) => (
+              <Card
+                key={`${n.id}-${n.createdAt}`}
+                onPress={() => void onPressNotification(n.id)}
+                className={`mb-3 border-border/80 ${
+                  n.read ? 'bg-bg-card' : 'bg-primary border-primary/60'
+                }`}
               >
-                <Card
-                  className={`mb-3 border-border/80 ${
-                    !notification.read ? 'bg-primary/5 border-primary/15' : ''
-                  }`}
-                >
-                  <View className="flex-row items-start">
-                    <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center mr-3 border border-primary/10">
-                      <Ionicons
-                        name={getNotificationIconName(notification.type)}
-                        size={20}
-                        color={colors.primary.main}
-                      />
-                    </View>
-                    <View className="flex-1">
-                      <View className="flex-row items-start justify-between mb-1">
-                        <Text
-                          className={`text-base font-semibold flex-1 ${
-                            !notification.read ? 'text-text' : 'text-text-secondary'
-                          }`}
-                        >
-                          {notification.title}
-                        </Text>
-                        {!notification.read && (
-                          <View className="w-2 h-2 bg-primary rounded-full ml-2 mt-2" />
-                        )}
-                      </View>
-                      <Text className="text-sm text-text-secondary mb-2 leading-5">
-                        {notification.message}
-                      </Text>
-                      <Text className="text-xs text-text-tertiary">
-                        {formatRelativeTime(notification.createdAt)}
-                      </Text>
-                    </View>
+                <View className="flex-row items-start justify-between">
+                  <View className="flex-1 pr-3">
+                    <Text
+                      className={`text-base font-semibold mb-1 ${
+                        n.read ? 'text-text-secondary' : 'text-white'
+                      }`}
+                    >
+                      {n.title}
+                    </Text>
+                    <Text
+                      className={`text-sm leading-5 mb-2 ${
+                        n.read ? 'text-text-secondary' : 'text-primary-contrast'
+                      }`}
+                    >
+                      {n.message}
+                    </Text>
+                    <Text
+                      className={`text-xs ${
+                        n.read ? 'text-text-tertiary' : 'text-white/80'
+                      }`}
+                    >
+                      {formatRelativeTime(n.createdAt)}
+                    </Text>
                   </View>
-                </Card>
-              </TouchableOpacity>
+                  {!n.read ? (
+                    <View className="mt-1 ml-2 w-2 h-2 rounded-full bg-white/85" />
+                  ) : null}
+                </View>
+              </Card>
             ))
           )}
         </View>
@@ -234,4 +172,3 @@ export default function NotificationsScreen() {
     </SafeAreaView>
   );
 }
-

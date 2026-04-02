@@ -1,14 +1,15 @@
 import { authService } from '@/services/auth';
-import { API_BASE_URL } from '@/services/config';
+import { getApiBaseUrl, initializeApiConfig } from '@/services/config';
 
 export function resolveReportFileUrl(relativeOrAbsoluteUrl: string): string {
   if (relativeOrAbsoluteUrl.startsWith('http')) return relativeOrAbsoluteUrl;
-  return `${API_BASE_URL}${relativeOrAbsoluteUrl}`;
+  return `${getApiBaseUrl()}${relativeOrAbsoluteUrl}`;
 }
 
 export async function buildAuthorizedReportFileUrl(
   relativeOrAbsoluteUrl: string,
 ): Promise<string> {
+  await initializeApiConfig();
   const url = resolveReportFileUrl(relativeOrAbsoluteUrl);
   const token = await authService.getAccessToken();
   const sep = url.includes('?') ? '&' : '?';

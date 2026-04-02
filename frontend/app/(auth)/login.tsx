@@ -65,6 +65,8 @@ export default function LoginScreen() {
       const user = await authService.login({
         email: email.trim(),
         password,
+      }, {
+        rememberSession: rememberMe,
       });
 
       if (!user) {

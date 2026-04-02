@@ -73,3 +73,25 @@ mcp.json
 .cgcignore
 *.zip
 *.md
+
+# Expo / EAS / React Native build artifacts
+.expo/
+.turbo/
+frontend/.expo/
+frontend/.turbo/
+frontend/.cache/
+frontend/android/app/build/
+frontend/android/build/
+frontend/android/.gradle/
+frontend/android/gradle-out/
+frontend/ios/build/
+frontend/dist/
+
+# EAS local artifacts
+eas-build/
+*.apk
+*.aab
+
+# Backend generated files
+express-backend/generated-reports/
+express-backend/.tmp/

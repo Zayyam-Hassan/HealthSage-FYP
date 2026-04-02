@@ -21,6 +21,7 @@ import { treatmentRouter } from './routes/treatment';
 import { reportModuleRouter } from './routes/reportModule';
 import { whatIfRouter } from './routes/whatIf';
 import { doctorTreatmentRouter } from './routes/doctorTreatment';
+import { notificationsRouter } from './routes/notifications';
 
 const app = express();
 const JSON_BODY_LIMIT = '25mb';
@@ -69,6 +70,7 @@ app.use('/api/v1/doctor-treatment', doctorTreatmentRouter);
 app.use('/api/v1/compatibility', compatibilityRouter);
 app.use('/api/v1/risk', riskRouter);
 app.use('/api/v1/chatbot', chatbotRouter);
+app.use('/api/v1/notifications', notificationsRouter);
 
 // Error handler (keep last)
 app.use(errorHandler);

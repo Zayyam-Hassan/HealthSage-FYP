@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiClient, ApiError, setAccessToken } from './api';
+import { unregisterCurrentDevice } from '@/src/shared/services/notificationService';
 
 const AUTH_USER_KEY = '@healthsage_user';
 
@@ -25,6 +26,10 @@ export interface SignupPayload {
   role: UserRole;
 }
 
+export interface LoginOptions {
+  rememberSession?: boolean;
+}
+
 export interface UpdateProfilePayload {
   display_name?: string;
   email?: string;
@@ -38,16 +43,20 @@ export interface UpdateProfilePayload {
 class AuthService {
   private inMemoryUser: AuthUser | null = null;
 
-  private async persistUser(user: AuthUser) {
+  private async persistUser(user: AuthUser, rememberSession = true) {
     this.inMemoryUser = user;
     setAccessToken(user.access_token ?? null);
-    await AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    if (rememberSession) {
+      await AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    } else {
+      await AsyncStorage.removeItem(AUTH_USER_KEY);
+    }
   }
 
-  async login(payload: LoginPayload): Promise<AuthUser> {
+  async login(payload: LoginPayload, options?: LoginOptions): Promise<AuthUser> {
     try {
       const user = await apiClient.post<AuthUser>('/auth/login', payload);
-      await this.persistUser(user);
+      await this.persistUser(user, options?.rememberSession ?? false);
       return user;
     } catch (error) {
       const err = error as ApiError;
@@ -96,6 +105,7 @@ class AuthService {
   }
 
   async logout(): Promise<void> {
+    await unregisterCurrentDevice().catch(() => undefined);
     this.inMemoryUser = null;
     setAccessToken(null);
     await AsyncStorage.removeItem(AUTH_USER_KEY);

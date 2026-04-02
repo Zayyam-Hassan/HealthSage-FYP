@@ -5,6 +5,10 @@ import { appointmentSlotStatuses } from '../models/AppointmentSlot';
 import { scheduledAppointmentStatuses } from '../models/ScheduledAppointment';
 import { weekdayValues } from '../models/DoctorAvailability';
 import {
+  createNotificationForDoctorProfile,
+  createNotificationForPatientProfile,
+} from '../services/notificationsService';
+import {
   SchedulingError,
   blockDoctorSlotForUser,
   bookAppointmentForPatientUser,
@@ -183,7 +187,18 @@ export async function cancelDoctorAppointment(
   res: Response,
 ): Promise<void> {
   try {
-    res.json(await cancelAppointmentForUser(req.user!, req.params.appointmentId));
+    const appointment = await cancelAppointmentForUser(req.user!, req.params.appointmentId);
+    await createNotificationForPatientProfile(appointment.patient_id, {
+      type: 'appointment_cancelled',
+      title: 'Appointment cancelled',
+      message: `${appointment.doctor_name ?? 'Your doctor'} cancelled your appointment scheduled for ${appointment.display_date ?? 'a future time'}.`,
+      href: '/appointments',
+      data: {
+        appointment_id: appointment.id,
+        doctor_id: appointment.doctor_id,
+      },
+    }).catch(() => null);
+    res.json(appointment);
   } catch (error) {
     handleError(res, error);
   }
@@ -195,13 +210,22 @@ export async function completeDoctorAppointment(
 ): Promise<void> {
   try {
     const payload = CompleteAppointmentSchema.parse(req.body ?? {});
-    res.json(
-      await completeAppointmentForDoctorUser(
-        req.user!.sub,
-        req.params.appointmentId,
-        payload,
-      ),
+    const appointment = await completeAppointmentForDoctorUser(
+      req.user!.sub,
+      req.params.appointmentId,
+      payload,
     );
+    await createNotificationForPatientProfile(appointment.patient_id, {
+      type: 'appointment_completed',
+      title: 'Appointment completed',
+      message: `${appointment.doctor_name ?? 'Your doctor'} marked your appointment as completed.`,
+      href: '/appointments',
+      data: {
+        appointment_id: appointment.id,
+        doctor_id: appointment.doctor_id,
+      },
+    }).catch(() => null);
+    res.json(appointment);
   } catch (error) {
     handleError(res, error);
   }
@@ -232,6 +256,16 @@ export async function createPatientAppointment(
   try {
     const payload = BookAppointmentSchema.parse(req.body);
     const appointment = await bookAppointmentForPatientUser(req.user!.sub, payload);
+    await createNotificationForDoctorProfile(appointment.doctor_id, {
+      type: 'appointment_booked',
+      title: 'New appointment booked',
+      message: `${appointment.patient_name ?? 'A patient'} booked ${appointment.display_date ?? 'an upcoming'} appointment with you.`,
+      href: '/appointments',
+      data: {
+        appointment_id: appointment.id,
+        patient_id: appointment.patient_id,
+      },
+    }).catch(() => null);
     res.status(StatusCodes.CREATED).json(appointment);
   } catch (error) {
     handleError(res, error);
@@ -255,7 +289,18 @@ export async function cancelPatientAppointment(
   res: Response,
 ): Promise<void> {
   try {
-    res.json(await cancelAppointmentForUser(req.user!, req.params.appointmentId));
+    const appointment = await cancelAppointmentForUser(req.user!, req.params.appointmentId);
+    await createNotificationForDoctorProfile(appointment.doctor_id, {
+      type: 'appointment_cancelled_by_patient',
+      title: 'Appointment cancelled by patient',
+      message: `${appointment.patient_name ?? 'A patient'} cancelled an upcoming appointment.`,
+      href: '/appointments',
+      data: {
+        appointment_id: appointment.id,
+        patient_id: appointment.patient_id,
+      },
+    }).catch(() => null);
+    res.json(appointment);
   } catch (error) {
     handleError(res, error);
   }

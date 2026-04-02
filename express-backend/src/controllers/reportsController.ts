@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { Doctor } from '../models/Doctor';
 import { Patient } from '../models/Patient';
 import { Report } from '../models/Report';
+import { createNotificationForPatientProfile } from '../services/notificationsService';
 import { buildPatientCarePdfSections } from '../utils/patientCareReport';
 import { writeReportPdf } from '../utils/reportPdf';
 
@@ -281,6 +282,16 @@ export async function sendReportToPatient(req: Request, res: Response): Promise<
   report.last_sent_at = new Date();
   report.send_count = (report.send_count ?? 0) + 1;
   await report.save();
+  await createNotificationForPatientProfile(report.patient_id, {
+    type: 'generated_report_shared',
+    title: 'New shared report',
+    message: `${report.title} is now available in your reports.`,
+    href: '/reports',
+    data: {
+      patient_id: report.patient_id.toString(),
+      report_id: report.id,
+    },
+  }).catch(() => null);
 
   res.json(mapReport(report));
 }

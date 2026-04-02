@@ -106,10 +106,10 @@ export default function ProfileScreen() {
             Account
           </Text>
           {[
-            { id: 'edit', title: 'Edit profile', route: '/settings/edit-profile' },
-            { id: 'password', title: 'Change password', route: '/settings/change-password' },
-            { id: 'reports', title: 'Reports', route: '/reports' },
-            { id: 'help', title: 'Help and support', route: '/help-support' },
+            { id: 'edit', title: 'Edit profile', route: '/settings/edit-profile', badge: 0 },
+            { id: 'password', title: 'Change password', route: '/settings/change-password', badge: 0 },
+            { id: 'reports', title: 'Reports', route: '/reports', badge: 0 },
+            { id: 'help', title: 'Help and support', route: '/help-support', badge: 0 },
           ].map((item) => (
             <TouchableOpacity
               key={item.id}
@@ -120,7 +120,16 @@ export default function ProfileScreen() {
             >
               <Card className="mb-3 py-3.5 border-border/80">
                 <View className="flex-row items-center justify-between">
-                  <Text className="text-base font-semibold text-text leading-6">{item.title}</Text>
+                  <View className="flex-row items-center flex-1">
+                    <Text className="text-base font-semibold text-text leading-6">{item.title}</Text>
+                    {item.badge > 0 ? (
+                      <View className="ml-2 min-w-[22px] h-[22px] px-1.5 rounded-full bg-primary items-center justify-center">
+                        <Text className="text-xs font-bold text-white">
+                          {item.badge > 99 ? '99+' : item.badge}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
                   <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
                 </View>
               </Card>

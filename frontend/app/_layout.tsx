@@ -2,28 +2,50 @@ import './global.css';
 
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import Loader from '@/components/Loader';
+import { initializeApiConfig } from '@/services/config';
 import { AuthProvider } from '@/src/features/auth/context/AuthProvider';
-import { initializeNotifications } from '@/src/shared/services/notificationService';
+import { initializeLocalNotifications } from '@/src/shared/services/localNotifications';
+import { NotificationResponseListener } from '@/src/shared/components/NotificationResponseListener';
 
 export default function RootLayout() {
+  const [isReady, setIsReady] = useState(false);
+
   useEffect(() => {
-    initializeNotifications().catch(() => undefined);
+    let cancelled = false;
+
+    (async () => {
+      await initializeApiConfig().catch(() => undefined);
+      await initializeLocalNotifications().catch(() => undefined);
+      if (!cancelled) {
+        setIsReady(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
-        <AuthProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-            }}
-          />
-        </AuthProvider>
+        {isReady ? (
+          <AuthProvider>
+            <NotificationResponseListener />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+              }}
+            />
+          </AuthProvider>
+        ) : (
+          <Loader fullScreen text="Detecting your backend connection..." />
+        )}
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

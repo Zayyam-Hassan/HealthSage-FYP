@@ -7,9 +7,9 @@ async function bootstrap(): Promise<void> {
   await connectMongo();
 
   const server = http.createServer(app);
-  server.listen(env.port, () => {
+  server.listen(env.port, env.host, () => {
     // eslint-disable-next-line no-console
-    console.log(`Express backend listening on port ${env.port}`);
+    console.log(`Express backend listening on http://${env.host}:${env.port}`);
   });
 }
 
