@@ -1,5 +1,5 @@
 import http from 'http';
-import { app } from './app';
+import  app  from './app';
 import { env } from './config/env';
 import { connectMongo } from './db/mongoose';
 

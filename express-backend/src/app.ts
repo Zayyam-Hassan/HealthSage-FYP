@@ -75,5 +75,5 @@ app.use('/api/v1/notifications', notificationsRouter);
 // Error handler (keep last)
 app.use(errorHandler);
 
-export { app };
+export default app;
 
