@@ -1,5 +1,4 @@
-import type { Request, Response } from 'express';
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import mongoose from 'mongoose';
 import { connectToDatabase } from '../config/db';
 
@@ -36,7 +35,7 @@ export async function healthDbHandler(_req: Request, res: Response): Promise<voi
 
 const router = Router();
 
-/** Register more specific path first */
+/** More specific route first — needed when mounted at `/api/v1` → full path `/api/v1/health/db`. */
 router.get('/health/db', healthDbHandler);
 
 router.get('/health', (_req, res) => {

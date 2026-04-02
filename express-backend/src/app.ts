@@ -52,8 +52,9 @@ app.use(
   morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'),
 );
 app.use(ensureDbConnection);
-/** Explicit path so GET /api/v1/health/db always resolves (nested router + some hosts). */
+/** DB health: multiple paths — Vercel `api` handlers sometimes see `/v1/...` without `/api` prefix. */
 app.get('/api/v1/health/db', healthDbHandler);
+app.get('/v1/health/db', healthDbHandler);
 app.get('/', (_req, res) => {
   res.json({
     name: 'HealthSage Express Backend',

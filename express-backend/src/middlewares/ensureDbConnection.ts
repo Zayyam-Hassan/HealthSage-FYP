@@ -11,6 +11,8 @@ function shouldSkipDbConnection(req: Request): boolean {
   if (p === '/') return true;
   if (p === '/health') return true;
   if (p === '/api/v1/health') return true;
+  /** Handler calls connectToDatabase + ping; skip here to avoid connecting twice per request. */
+  if (p === '/api/v1/health/db') return true;
   return false;
 }
 
