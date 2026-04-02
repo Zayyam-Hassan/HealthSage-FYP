@@ -2,18 +2,6 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-/**
- * Throws at process startup if a required env var is missing or blank.
- * Do not use localhost fallbacks for production-critical values.
- */
-export function required(name: string): string {
-  const value = process.env[name];
-  if (value === undefined || value.trim() === '') {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value.trim();
-}
-
 const rawCors = process.env.CORS_ORIGIN ?? '*';
 const corsOrigins =
   rawCors === '*'
@@ -28,10 +16,11 @@ export const env = {
   /** Bind address so phones on the same LAN can reach the API (default all interfaces). */
   host: process.env.HOST ?? '0.0.0.0',
   port: Number(process.env.PORT ?? 9000),
-  mongoUri: required('MONGO_URI'),
-  mongoDbName: required('MONGO_DB_NAME'),
-  jwtSecret: required('JWT_SECRET'),
+  mongoUri: process.env.MONGO_URI ?? 'mongodb://localhost:27017',
+  mongoDbName: process.env.MONGO_DB_NAME ?? 'HealthSage_v1',
+  jwtSecret: process.env.JWT_SECRET ?? 'change_me_in_dev_only',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '1h',
-  fastApiBaseUrl: required('FASTAPI_BASE_URL'),
+  fastApiBaseUrl: process.env.FASTAPI_BASE_URL ?? 'http://localhost:8000/api/v1',
   corsOrigins,
 } as const;
+

@@ -11,6 +11,16 @@ const DEPLOYED_FASTAPI_API = 'http://13.63.229.105/api/v1';
 
 module.exports = ({ config }) => ({
   ...config,
+  // iOS blocks http:// by default (ATS). FastAPI is http on a public IP — must allow cleartext.
+  ios: {
+    ...(config.ios ?? {}),
+    infoPlist: {
+      ...(config.ios?.infoPlist ?? {}),
+      NSAppTransportSecurity: {
+        NSAllowsArbitraryLoads: true,
+      },
+    },
+  },
   plugins: [
     ...(config.plugins ?? []),
     [

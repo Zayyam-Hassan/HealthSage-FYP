@@ -5,9 +5,8 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 
 import { env } from './config/env';
-import { ensureDbConnection } from './middlewares/ensureDbConnection';
 import { errorHandler } from './middlewares/errorHandler';
-import { healthDbHandler, healthRouter } from './routes/health';
+import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
 import { patientsRouter } from './routes/patients';
 import { riskRouter } from './routes/risk';
@@ -51,17 +50,12 @@ app.use(cookieParser());
 app.use(
   morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'),
 );
-app.use(ensureDbConnection);
-/** DB health: multiple paths — Vercel `api` handlers sometimes see `/v1/...` without `/api` prefix. */
-app.get('/api/v1/health/db', healthDbHandler);
-app.get('/v1/health/db', healthDbHandler);
 app.get('/', (_req, res) => {
   res.json({
     name: 'HealthSage Express Backend',
     status: 'ok',
     health: '/health',
     apiHealth: '/api/v1/health',
-    apiHealthDb: '/api/v1/health/db',
   });
 });
 // Public health check

@@ -315,6 +315,14 @@ async function discoverLanHost(): Promise<string | null> {
   return discoverHostOnSubnet(currentIp, preferredHosts);
 }
 
+function logResolvedApiUrls(): void {
+  if (!__DEV__) return;
+  // eslint-disable-next-line no-console
+  console.log('[config] Express API base:', appApiBaseUrl);
+  // eslint-disable-next-line no-console
+  console.log('[config] FastAPI base:', fastApiBaseUrl);
+}
+
 async function configureRuntimeUrls(forceDiscovery: boolean): Promise<void> {
   if (!forceDiscovery && configReady) return;
 
@@ -322,6 +330,7 @@ async function configureRuntimeUrls(forceDiscovery: boolean): Promise<void> {
 
   if (!shouldAttemptLanDiscovery(DEFAULT_APP_API_BASE_URL)) {
     configReady = true;
+    logResolvedApiUrls();
     return;
   }
 
@@ -333,6 +342,7 @@ async function configureRuntimeUrls(forceDiscovery: boolean): Promise<void> {
     await clearDiscoveredHost();
   }
   configReady = true;
+  logResolvedApiUrls();
 }
 
 async function runConfiguration(forceDiscovery: boolean): Promise<void> {

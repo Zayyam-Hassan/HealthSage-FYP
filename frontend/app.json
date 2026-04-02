@@ -64,7 +64,7 @@
       "eas": {
         "projectId": "2cf8e458-b1fb-4a38-a265-7155d37870f4"
       },
-      "expressApiUrl": "https://health-sage-fyp.vercel.app",
+      "expressApiUrl": "https://health-sage-fyp.vercel.app/api/v1",
       "fastApiUrl": "http://13.63.229.105/api/v1"
     },
     "owner": "zayyam"

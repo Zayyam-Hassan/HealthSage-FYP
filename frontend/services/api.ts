@@ -1,4 +1,12 @@
-import { getApiBaseUrl, initializeApiConfig, refreshApiConfig } from './config';
+import {
+  getApiBaseUrl,
+  initializeApiConfig,
+  refreshApiConfig,
+  usesLanBackendDiscovery,
+} from './config';
+
+/** Abort hanging requests so the UI does not spin forever (Vercel cold start is still bounded). */
+const REQUEST_TIMEOUT_MS = 45_000;
 
 export interface ApiError {
   message: string;
@@ -38,7 +46,10 @@ class ApiClient {
           };
 
     const url = `${this.getBaseURL()}${endpoint}`;
-    
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
     try {
       if (__DEV__) {
         console.log(`[api] ${options.method ?? 'GET'} ${url}`);
@@ -46,7 +57,9 @@ class ApiClient {
       const response = await fetch(url, {
         ...options,
         headers,
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       // Handle non-JSON responses (like 204 No Content)
       const contentType = response.headers.get('content-type');
@@ -75,7 +88,21 @@ class ApiClient {
 
       return data;
     } catch (error) {
-      if (error instanceof Error && !hasRetriedAfterRefresh) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw {
+          message: `Request timed out (${REQUEST_TIMEOUT_MS / 1000}s). Check network, VPN, and that the API is up.`,
+          status: 0,
+        } as ApiError;
+      }
+
+      // Only re-run LAN discovery + retry when using a local/private backend URL.
+      if (
+        error instanceof Error &&
+        !hasRetriedAfterRefresh &&
+        usesLanBackendDiscovery()
+      ) {
         await refreshApiConfig();
         return this.request<T>(endpoint, options, true);
       }
