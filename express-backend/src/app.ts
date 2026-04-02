@@ -7,7 +7,7 @@ import cookieParser from 'cookie-parser';
 import { env } from './config/env';
 import { ensureDbConnection } from './middlewares/ensureDbConnection';
 import { errorHandler } from './middlewares/errorHandler';
-import { healthRouter } from './routes/health';
+import { healthDbHandler, healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
 import { patientsRouter } from './routes/patients';
 import { riskRouter } from './routes/risk';
@@ -52,6 +52,8 @@ app.use(
   morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'),
 );
 app.use(ensureDbConnection);
+/** Explicit path so GET /api/v1/health/db always resolves (nested router + some hosts). */
+app.get('/api/v1/health/db', healthDbHandler);
 app.get('/', (_req, res) => {
   res.json({
     name: 'HealthSage Express Backend',

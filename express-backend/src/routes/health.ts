@@ -1,18 +1,13 @@
+import type { Request, Response } from 'express';
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { connectToDatabase } from '../config/db';
 
-const router = Router();
-
-router.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
-
 /**
- * Verifies MongoDB connectivity (Atlas / serverless-safe).
- * GET /api/v1/health/db when mounted under /api/v1
+ * Mongo ping — exported so app.ts can register GET /api/v1/health/db explicitly
+ * (avoids 404s when nested router paths behave oddly behind some proxies).
  */
-router.get('/health/db', async (_req, res) => {
+export async function healthDbHandler(_req: Request, res: Response): Promise<void> {
   try {
     await connectToDatabase();
     const db = mongoose.connection.db;
@@ -37,6 +32,15 @@ router.get('/health/db', async (_req, res) => {
       message,
     });
   }
+}
+
+const router = Router();
+
+/** Register more specific path first */
+router.get('/health/db', healthDbHandler);
+
+router.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
 });
 
 export { router as healthRouter };
