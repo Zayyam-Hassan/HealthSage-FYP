@@ -3,8 +3,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import mongoose from 'mongoose';
 
 import { env } from './config/env';
+import { connectToDatabase } from './config/db';
 import { errorHandler } from './middlewares/errorHandler';
 import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
@@ -22,6 +24,8 @@ import { reportModuleRouter } from './routes/reportModule';
 import { whatIfRouter } from './routes/whatIf';
 import { doctorTreatmentRouter } from './routes/doctorTreatment';
 import { notificationsRouter } from './routes/notifications';
+
+mongoose.set('bufferCommands', false);
 
 const app = express();
 const JSON_BODY_LIMIT = '25mb';
@@ -50,6 +54,17 @@ app.use(cookieParser());
 app.use(
   morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'),
 );
+
+/** Ensure MongoDB is connected before any handler under /api runs (avoids Mongoose command buffering). */
+app.use('/api', async (_req, res, next) => {
+  try {
+    await connectToDatabase();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.get('/', (_req, res) => {
   res.json({
     name: 'HealthSage Express Backend',
