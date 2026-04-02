@@ -15,6 +15,16 @@ from services.risk.risk_service import get_risk_with_explanation
 router = APIRouter(prefix="/risk", tags=["risk"])
 
 
+def _http_for_value_error(err: ValueError) -> HTTPException:
+    """Map domain errors to appropriate status codes (not 422 for missing patient)."""
+    msg = str(err)
+    if msg.startswith("Invalid patient_id"):
+        return HTTPException(status_code=400, detail=msg)
+    if "not found" in msg.lower():
+        return HTTPException(status_code=404, detail=msg)
+    return HTTPException(status_code=422, detail=msg)
+
+
 def _risk_audit_log(patient_id: str, result: Dict[str, Any], with_explanation: bool = False) -> None:
     try:
         db = get_db()
@@ -40,7 +50,7 @@ async def get_risk(patient_id: str):
         _risk_audit_log(patient_id, result, with_explanation=False)
         return result
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
+        raise _http_for_value_error(e) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -55,6 +65,6 @@ async def get_risk_explain(patient_id: str):
         _risk_audit_log(patient_id, result, with_explanation=True)
         return result
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
+        raise _http_for_value_error(e) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
