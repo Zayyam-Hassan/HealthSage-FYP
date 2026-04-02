@@ -1,8 +1,11 @@
 import mongoose from 'mongoose';
 import { env } from './env';
 
-let cachedPromise: Promise<typeof mongoose> | null = null;
+/** Must run before any model/schema is loaded (import this module early from app entry). */
+mongoose.set('bufferCommands', false);
+mongoose.set('bufferTimeoutMS', 5000);
 
+let cachedPromise: Promise<typeof mongoose> | null = null;
 export async function connectToDatabase(): Promise<typeof mongoose> {
   if (mongoose.connection.readyState === 1) {
     return mongoose;
@@ -14,7 +17,9 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
     cachedPromise = mongoose
       .connect(env.mongoUri, {
         dbName: env.mongoDbName,
-        serverSelectionTimeoutMS: 10000,
+        serverSelectionTimeoutMS: 8000,
+        connectTimeoutMS: 8000,
+        maxPoolSize: 10,
       })
       .then((m) => {
         console.log('MongoDB connected');

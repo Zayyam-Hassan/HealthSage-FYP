@@ -3,6 +3,7 @@
  * Do not use http.createServer() or listen() here (that pattern belongs in local dev).
  * @see src/local.ts for npm run dev / npm start
  */
+import './config/db';
 import app from './app';
 
 export default app;

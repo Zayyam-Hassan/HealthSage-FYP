@@ -2,6 +2,7 @@
  * Local development / traditional Node host only — not used by Vercel.
  * Vercel loads src/server.ts (default export, no listen).
  */
+import './config/db';
 import http from 'http';
 import app from './app';
 import { env } from './config/env';
