@@ -6,7 +6,6 @@ import { z } from 'zod';
 import { Doctor } from '../models/Doctor';
 import { Patient } from '../models/Patient';
 import { User } from '../models/User';
-import { connectToDatabase } from '../config/db';
 import { createWelcomeNotificationForUser } from '../services/notificationsService';
 import { signAccessToken } from '../utils/jwt';
 import type { UserRole } from '../types/roles';
@@ -149,10 +148,6 @@ export async function login(req: Request, res: Response): Promise<void> {
 
   const { email, password } = parse.data;
   const normalizedEmail = email.toLowerCase();
-
-  console.log('Before DB connect');
-  await connectToDatabase();
-  console.log('After DB connect, readyState:', mongoose.connection.readyState);
 
   const user = await User.findOne({ email: normalizedEmail, disabled: false });
   if (!user) {

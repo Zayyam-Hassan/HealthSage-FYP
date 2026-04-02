@@ -4,8 +4,6 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 
-/** Loads env + applies mongoose buffer settings before any route/model imports below. */
-import { connectToDatabase } from './config/db';
 import { env } from './config/env';
 import { errorHandler } from './middlewares/errorHandler';
 import { healthRouter } from './routes/health';
@@ -52,20 +50,6 @@ app.use(cookieParser());
 app.use(
   morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'),
 );
-
-/**
- * Connect before any route runs. (Do not scope to `/api` only — Vercel path rewrites can strip
- * prefixes so `/api`-only middleware may never run, letting queries hit Mongoose while disconnected.)
- */
-app.use(async (_req, _res, next) => {
-  try {
-    await connectToDatabase();
-    next();
-  } catch (err) {
-    next(err);
-  }
-});
-
 app.get('/', (_req, res) => {
   res.json({
     name: 'HealthSage Express Backend',
