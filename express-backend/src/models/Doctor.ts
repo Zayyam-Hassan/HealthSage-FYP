@@ -18,7 +18,6 @@ const DoctorSchema = new Schema<DoctorDocument>(
     user_id: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      index: true,
       sparse: true,
       default: null,
     },

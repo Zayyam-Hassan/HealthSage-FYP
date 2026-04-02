@@ -1,7 +1,14 @@
 /**
  * Extends app.json so EAS can inject EXPO_PUBLIC_* at build time and config plugins
  * can apply native Android settings such as cleartext HTTP access on LAN.
+ *
+ * When EXPO_PUBLIC_* is unset (e.g. local `expo start` without .env), we default to
+ * deployed backends so the app does not fall back to localhost + LAN discovery.
+ * Override with frontend/.env or EXPO_PUBLIC_* for local Express/FastAPI on your LAN.
  */
+const DEPLOYED_EXPRESS_API = 'https://health-sage-fyp.vercel.app/api/v1';
+const DEPLOYED_FASTAPI_API = 'http://13.63.229.105/api/v1';
+
 module.exports = ({ config }) => ({
   ...config,
   plugins: [
@@ -17,7 +24,7 @@ module.exports = ({ config }) => ({
   ],
   extra: {
     ...config.extra,
-    expressApiUrl: process.env.EXPO_PUBLIC_EXPRESS_API_URL ?? '',
-    fastApiUrl: process.env.EXPO_PUBLIC_FASTAPI_API_URL ?? '',
+    expressApiUrl: process.env.EXPO_PUBLIC_EXPRESS_API_URL || DEPLOYED_EXPRESS_API,
+    fastApiUrl: process.env.EXPO_PUBLIC_FASTAPI_API_URL || DEPLOYED_FASTAPI_API,
   },
 });

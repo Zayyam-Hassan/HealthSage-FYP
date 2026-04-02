@@ -2,7 +2,7 @@
   "expo": {
     "name": "HealthSage",
     "slug": "healthsage",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "scheme": "healthsage",
@@ -62,11 +62,11 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "0d04d12d-a289-4707-802d-62add75ff396"
+        "projectId": "2cf8e458-b1fb-4a38-a265-7155d37870f4"
       },
-      "expressApiUrl": "",
-      "fastApiUrl": ""
+      "expressApiUrl": "https://health-sage-fyp.vercel.app",
+      "fastApiUrl": "http://13.63.229.105/api/v1"
     },
-    "owner": "zayyam_1"
+    "owner": "zayyam"
   }
 }

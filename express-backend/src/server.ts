@@ -1,11 +1,12 @@
 import http from 'http';
-import  app  from './app';
+import app from './app';
 import { env } from './config/env';
-import { connectMongo } from './db/mongoose';
 
-async function bootstrap(): Promise<void> {
-  await connectMongo();
-
+/**
+ * MongoDB connects lazily on first request (see ensureDbConnection + connectToDatabase).
+ * Do not await DB here — required for Vercel serverless and fast local startup.
+ */
+function bootstrap(): void {
   const server = http.createServer(app);
   server.listen(env.port, env.host, () => {
     // eslint-disable-next-line no-console
@@ -13,9 +14,4 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-bootstrap().catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error('Failed to start Express backend', err);
-  process.exit(1);
-});
-
+bootstrap();

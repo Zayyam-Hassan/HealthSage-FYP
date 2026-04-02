@@ -5,9 +5,8 @@
  * - Express app backend on port 9000 for auth/app routes
  * - FastAPI backend on port 8000 for AI services
  *
- * In production APKs we cannot rely on a fixed LAN IP because laptops receive a
- * different address after switching Wi-Fi. We keep build-time URLs as hints, but
- * verify and rediscover the backend at runtime on the phone's current subnet.
+ * When the base URL is localhost or a private LAN IP, we verify and rediscover
+ * the backend on the phone's subnet. Public URLs (Vercel, cloud IP) skip discovery.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
@@ -353,6 +352,11 @@ export async function initializeApiConfig(): Promise<void> {
 export async function refreshApiConfig(): Promise<void> {
   configReady = false;
   await runConfiguration(true);
+}
+
+/** True when the app will scan the LAN for Express (localhost/private IP only). */
+export function usesLanBackendDiscovery(): boolean {
+  return shouldAttemptLanDiscovery(DEFAULT_APP_API_BASE_URL);
 }
 
 export function getApiBaseUrl(): string {

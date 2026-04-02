@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 
 import { env } from './config/env';
+import { ensureDbConnection } from './middlewares/ensureDbConnection';
 import { errorHandler } from './middlewares/errorHandler';
 import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
@@ -50,12 +51,14 @@ app.use(cookieParser());
 app.use(
   morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'),
 );
+app.use(ensureDbConnection);
 app.get('/', (_req, res) => {
   res.json({
     name: 'HealthSage Express Backend',
     status: 'ok',
     health: '/health',
     apiHealth: '/api/v1/health',
+    apiHealthDb: '/api/v1/health/db',
   });
 });
 // Public health check

@@ -1,28 +1,28 @@
 {
-    "cli": { "version": ">= 10.0.0" },
-    "build": {
-      "development": {
-        "developmentClient": true,
+  "cli": { "version": ">= 10.0.0" },
+  "build": {
+    "development": {
+      "developmentClient": true,
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_EXPRESS_API_URL": "http://192.168.18.16:9000/api/v1",
         "EXPO_PUBLIC_FASTAPI_API_URL": "http://192.168.18.16:8000/api/v1"
       }
+    },
+    "apk": {
+      "android": {
+        "buildType": "apk"
       },
-      "apk": {
-        "android": {
-          "buildType": "apk"
-        },
-        "env": {
-          "EXPO_PUBLIC_EXPRESS_API_URL": "http://192.168.18.16:9000/api/v1",
-          "EXPO_PUBLIC_FASTAPI_API_URL": "http://192.168.18.16:8000/api/v1"
-        }
-      },
+      "env": {
+        "EXPO_PUBLIC_EXPRESS_API_URL": "https://health-sage-fyp.vercel.app",
+        "EXPO_PUBLIC_FASTAPI_API_URL": "http://13.63.229.105/api/v1"
+      }
+    },
     "production": {
       "env": {
-        "EXPO_PUBLIC_EXPRESS_API_URL": "http://192.168.18.16:9000/api/v1",
-        "EXPO_PUBLIC_FASTAPI_API_URL": "http://192.168.18.16:8000/api/v1"
+        "EXPO_PUBLIC_EXPRESS_API_URL": "https://health-sage-fyp.vercel.app",
+        "EXPO_PUBLIC_FASTAPI_API_URL": "http://13.63.229.105/api/v1"
       }
     }
-    }
   }
+}

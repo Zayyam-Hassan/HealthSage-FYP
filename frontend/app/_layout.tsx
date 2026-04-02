@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Loader from '@/components/Loader';
-import { initializeApiConfig } from '@/services/config';
+import { initializeApiConfig, usesLanBackendDiscovery } from '@/services/config';
 import { AuthProvider } from '@/src/features/auth/context/AuthProvider';
 import { initializeLocalNotifications } from '@/src/shared/services/localNotifications';
 import { NotificationResponseListener } from '@/src/shared/components/NotificationResponseListener';
@@ -44,7 +44,14 @@ export default function RootLayout() {
             />
           </AuthProvider>
         ) : (
-          <Loader fullScreen text="Detecting your backend connection..." />
+          <Loader
+            fullScreen
+            text={
+              usesLanBackendDiscovery()
+                ? 'Detecting your backend connection...'
+                : 'Loading...'
+            }
+          />
         )}
       </SafeAreaProvider>
     </GestureHandlerRootView>
