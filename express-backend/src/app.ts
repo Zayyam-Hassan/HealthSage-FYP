@@ -50,7 +50,14 @@ app.use(cookieParser());
 app.use(
   morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'),
 );
-
+app.get('/', (_req, res) => {
+  res.json({
+    name: 'HealthSage Express Backend',
+    status: 'ok',
+    health: '/health',
+    apiHealth: '/api/v1/health',
+  });
+});
 // Public health check
 app.use('/', healthRouter);
 
@@ -74,6 +81,5 @@ app.use('/api/v1/notifications', notificationsRouter);
 
 // Error handler (keep last)
 app.use(errorHandler);
-
 export default app;
 
