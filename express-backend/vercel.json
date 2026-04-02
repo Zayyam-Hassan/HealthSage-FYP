@@ -1,0 +1,14 @@
+{
+    "builds": [
+      {
+        "src": "express-backend/dist/app.js",
+        "use": "@vercel/node"
+      }
+    ],
+    "routes": [
+      {
+        "src": "/(.*)",
+        "dest": "express-backend/dist/app.js"
+      }
+    ]
+  }
