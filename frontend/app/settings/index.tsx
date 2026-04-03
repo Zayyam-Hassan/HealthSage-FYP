@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, ScrollView, Text, TouchableOpacity, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,7 +8,9 @@ import Card from '@/components/Card';
 import Avatar from '@/components/Avatar';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { colors } from '@/constants/colors';
+import { notificationsService } from '@/services/notifications';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
+import { resolveApiAssetUrl } from '@/utils/apiAssetUrl';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -38,6 +40,43 @@ export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
 
+  const updatePushNotifications = async (value: boolean) => {
+    setNotificationsEnabled(value);
+    try {
+      await notificationsService.updatePreferences({ push_enabled: value });
+    } catch {
+      setNotificationsEnabled((current) => !value);
+    }
+  };
+
+  const updateEmailNotifications = async (value: boolean) => {
+    setEmailNotifications(value);
+    try {
+      await notificationsService.updatePreferences({ email_enabled: value });
+    } catch {
+      setEmailNotifications((current) => !value);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const preferences = await notificationsService.getPreferences();
+        if (cancelled) return;
+        setNotificationsEnabled(preferences.push_enabled);
+        setEmailNotifications(preferences.email_enabled);
+      } catch {
+        // keep defaults if preferences are unavailable
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const settingsSections: Section[] = [
     {
       title: 'Account',
@@ -56,7 +95,9 @@ export default function SettingsScreen() {
           icon: 'notifications-outline',
           toggle: true,
           value: notificationsEnabled,
-          onToggle: setNotificationsEnabled,
+          onToggle: (value) => {
+            void updatePushNotifications(value);
+          },
         },
         {
           id: '5',
@@ -64,7 +105,9 @@ export default function SettingsScreen() {
           icon: 'mail-outline',
           toggle: true,
           value: emailNotifications,
-          onToggle: setEmailNotifications,
+          onToggle: (value) => {
+            void updateEmailNotifications(value);
+          },
         },
       ],
     },
@@ -90,6 +133,8 @@ export default function SettingsScreen() {
     );
   }
 
+  const avatarUri = resolveApiAssetUrl(user?.avatar_url);
+
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
       <Header
@@ -101,7 +146,12 @@ export default function SettingsScreen() {
         <View className="px-6 py-6">
           <Card className="border-border/80 shadow-sm">
             <View className="flex-row items-center">
-              <Avatar name={user?.display_name || 'User'} size="lg" className="mr-4" />
+              <Avatar
+                source={avatarUri ? { uri: avatarUri } : undefined}
+                name={user?.display_name || 'User'}
+                size="lg"
+                className="mr-4"
+              />
               <View className="flex-1 min-w-0">
                 <Text
                   className="text-lg font-semibold text-text mb-1 tracking-tight"

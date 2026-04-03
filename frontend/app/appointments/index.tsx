@@ -33,6 +33,7 @@ import { colors } from '@/constants/colors';
 import { formatApiError } from '@/src/shared/utils/formatApiError';
 import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
+import { useFocusedPolling } from '@/src/shared/hooks/useFocusedPolling';
 import { filterUpcomingBookedAppointments } from '@/utils/appointmentFilters';
 import AppointmentMonthCalendar from './AppointmentMonthCalendar';
 
@@ -138,6 +139,8 @@ const WEEKDAY_LONG: Record<SchedulingWeekday, string> = {
   friday: 'Friday',
   saturday: 'Saturday',
 };
+
+const APPOINTMENTS_REFRESH_MS = 15_000;
 
 function emptyAvailabilityForm(weekday: SchedulingWeekday = 'monday') {
   return {
@@ -267,6 +270,8 @@ export default function AppointmentsScreen() {
       loadData();
     }, [loadData]),
   );
+
+  useFocusedPolling(() => loadData(), APPOINTMENTS_REFRESH_MS, !authLoading);
 
   useEffect(() => {
     if (role === 'patient' && params.doctor_id) {

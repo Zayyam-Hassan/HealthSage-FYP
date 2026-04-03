@@ -13,6 +13,7 @@ import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoad
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { doctorsService } from '@/services/doctors';
 import { patientsService } from '@/services/patients';
+import { resolveApiAssetUrl } from '@/utils/apiAssetUrl';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -75,6 +76,8 @@ export default function ProfileScreen() {
     );
   }
 
+  const avatarUri = resolveApiAssetUrl(user?.avatar_url);
+
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <Header variant="coral" title="Profile" />
@@ -85,7 +88,12 @@ export default function ProfileScreen() {
         <View className="px-6 pt-6">
           <Card className="mb-6 bg-bg-secondary border-primary/12 shadow-sm">
             <View className="items-center">
-              <Avatar size="xl" name={user?.display_name || 'User'} className="mb-4" />
+              <Avatar
+                size="xl"
+                source={avatarUri ? { uri: avatarUri } : undefined}
+                name={user?.display_name || 'User'}
+                className="mb-4"
+              />
               <Text className="text-2xl font-bold text-text mb-1 tracking-tight">
                 {user?.display_name || 'User'}
               </Text>

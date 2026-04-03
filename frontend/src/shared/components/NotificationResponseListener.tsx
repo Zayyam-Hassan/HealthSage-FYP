@@ -1,14 +1,16 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
-import { markCachedNotificationRead } from '@/src/shared/services/notificationInboxStorage';
 import { router } from 'expo-router';
+import { notificationsService } from '@/services/notifications';
+import { emitNotificationStateChanged } from '@/src/shared/services/notificationEvents';
 
 export function NotificationResponseListener() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
     let cancelled = false;
-    let subscription: { remove: () => void } | undefined;
+    let responseSubscription: { remove: () => void } | undefined;
+    let receiveSubscription: { remove: () => void } | undefined;
 
     void (async () => {
       const Notifications = await import('expo-notifications');
@@ -27,8 +29,10 @@ export function NotificationResponseListener() {
             : null);
 
         if (typeof cachedId === 'string' && cachedId.length > 0) {
-          void markCachedNotificationRead(cachedId);
+          void notificationsService.markRead(cachedId).catch(() => undefined);
         }
+
+        emitNotificationStateChanged();
 
         // Optional deep-link support if you add `href` to notification `data`.
         const href = typeof data?.href === 'string' ? data.href : null;
@@ -48,12 +52,16 @@ export function NotificationResponseListener() {
         // ignore
       }
 
-      subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
+      responseSubscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
+      receiveSubscription = Notifications.addNotificationReceivedListener(() => {
+        emitNotificationStateChanged();
+      });
     })();
 
     return () => {
       cancelled = true;
-      subscription?.remove?.();
+      responseSubscription?.remove?.();
+      receiveSubscription?.remove?.();
     };
   }, []);
 

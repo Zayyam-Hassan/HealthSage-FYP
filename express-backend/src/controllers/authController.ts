@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import type { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { StatusCodes } from 'http-status-codes';
@@ -53,13 +55,48 @@ const ChangePasswordSchema = z.object({
   new_password: z.string().min(8),
 });
 
-function toAuthUser(doc: { id: string; email: string; display_name: string; role: UserRole }) {
+const UploadAvatarSchema = z.object({
+  file_name: z.string().min(1).max(180),
+  mime_type: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  file_data_base64: z.string().min(1),
+});
+
+const avatarMimeTypes: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+const AVATAR_DIR = path.join(process.cwd(), 'uploaded-avatars');
+const MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024;
+
+function toAuthUser(doc: {
+  id: string;
+  email: string;
+  display_name: string;
+  role: UserRole;
+  avatar_url?: string | null;
+}) {
   return {
     id: doc.id,
     email: doc.email,
     display_name: doc.display_name,
     role: doc.role,
+    avatar_url: doc.avatar_url ?? null,
   };
+}
+
+function extractAvatarFileName(avatarUrl?: string | null): string | null {
+  if (!avatarUrl) return null;
+  const match = avatarUrl.match(/\/auth\/avatars\/([^/?#]+)/i);
+  return match?.[1] ?? null;
+}
+
+async function removeStoredAvatar(avatarUrl?: string | null) {
+  const fileName = extractAvatarFileName(avatarUrl);
+  if (!fileName) return;
+  const target = path.join(AVATAR_DIR, path.basename(fileName));
+  await fs.promises.unlink(target).catch(() => undefined);
 }
 
 function buildProfileCode(prefix: 'DR' | 'PT', id: string): string {
@@ -143,6 +180,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
     email: user.email,
     display_name: user.display_name,
     role: user.role,
+    avatar_url: user.avatar_url,
   });
 
   const access_token = signAccessToken({
@@ -200,6 +238,7 @@ export async function login(req: Request, res: Response): Promise<void> {
     email: user.email,
     display_name: user.display_name,
     role: user.role,
+    avatar_url: user.avatar_url,
   });
 
   const access_token = signAccessToken({
@@ -231,6 +270,7 @@ export async function me(req: Request, res: Response): Promise<void> {
     email: user.email,
     display_name: user.display_name,
     role: user.role,
+    avatar_url: user.avatar_url,
   });
 
   await ensureRoleProfile(authUser);
@@ -308,6 +348,7 @@ export async function updateMe(req: Request, res: Response): Promise<void> {
     email: user.email,
     display_name: user.display_name,
     role: user.role,
+    avatar_url: user.avatar_url,
   });
 
   res.json(authUser);
@@ -354,4 +395,80 @@ export async function changePassword(req: Request, res: Response): Promise<void>
   await user.save();
 
   res.json({ message: 'Password updated successfully' });
+}
+
+export async function uploadMeAvatar(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(StatusCodes.UNAUTHORIZED).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const parse = UploadAvatarSchema.safeParse(req.body);
+  if (!parse.success) {
+    res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({
+      message: 'Invalid avatar payload',
+      detail: parse.error.flatten(),
+    });
+    return;
+  }
+
+  const user = await User.findById(req.user.sub);
+  if (!user || user.disabled) {
+    res.status(StatusCodes.UNAUTHORIZED).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const extension = avatarMimeTypes[parse.data.mime_type];
+  const buffer = Buffer.from(parse.data.file_data_base64, 'base64');
+
+  if (!buffer.length) {
+    res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({
+      message: 'Avatar image is empty',
+    });
+    return;
+  }
+
+  if (buffer.length > MAX_AVATAR_SIZE_BYTES) {
+    res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({
+      message: 'Avatar image must be 5MB or smaller',
+    });
+    return;
+  }
+
+  await fs.promises.mkdir(AVATAR_DIR, { recursive: true });
+  await removeStoredAvatar(user.avatar_url);
+
+  const fileName = `${user.id}-${Date.now()}.${extension}`;
+  const filePath = path.join(AVATAR_DIR, fileName);
+  await fs.promises.writeFile(filePath, buffer);
+
+  user.avatar_url = `/auth/avatars/${fileName}`;
+  await user.save();
+
+  res.json(
+    toAuthUser({
+      id: user.id,
+      email: user.email,
+      display_name: user.display_name,
+      role: user.role,
+      avatar_url: user.avatar_url,
+    }),
+  );
+}
+
+export async function getAvatar(req: Request, res: Response): Promise<void> {
+  const fileName = path.basename(req.params.filename ?? '');
+  if (!fileName) {
+    res.status(StatusCodes.NOT_FOUND).json({ message: 'Avatar not found' });
+    return;
+  }
+
+  const filePath = path.join(AVATAR_DIR, fileName);
+  if (!fs.existsSync(filePath)) {
+    res.status(StatusCodes.NOT_FOUND).json({ message: 'Avatar not found' });
+    return;
+  }
+
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.sendFile(filePath);
 }

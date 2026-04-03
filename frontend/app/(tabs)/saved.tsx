@@ -19,8 +19,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
 import { filterUpcomingBookedAppointments } from '@/utils/appointmentFilters';
 import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
+import { useFocusedPolling } from '@/src/shared/hooks/useFocusedPolling';
 
 const TAB_BAR_HEIGHT = 62;
+const SAVED_REFRESH_MS = 15_000;
 
 export default function SavedScreen() {
   const router = useRouter();
@@ -67,6 +69,8 @@ export default function SavedScreen() {
       }
     }, [authLoading, loadRecords]),
   );
+
+  useFocusedPolling(() => loadRecords(), SAVED_REFRESH_MS, !authLoading);
 
   const visibleAppointments = useMemo(
     () => filterUpcomingBookedAppointments(appointments as Appointment[]),

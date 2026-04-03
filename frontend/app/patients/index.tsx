@@ -10,11 +10,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import Header from '@/components/Header';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
+import { useFocusedPolling } from '@/src/shared/hooks/useFocusedPolling';
 import PatientCard from '@/components/PatientCard';
 import SearchBar from '@/components/searchbar';
 import { colors } from '@/constants/colors';
@@ -24,6 +26,8 @@ import {
   type DoctorAssignmentRequest,
 } from '@/services/doctors';
 import { patientsService, type Patient } from '@/services/patients';
+
+const PATIENTS_REFRESH_MS = 15_000;
 
 export default function PatientsListScreen() {
   const router = useRouter();
@@ -69,6 +73,16 @@ export default function PatientsListScreen() {
     if (authLoading) return;
     loadData();
   }, [authLoading, loadData]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!authLoading) {
+        void loadData();
+      }
+    }, [authLoading, loadData]),
+  );
+
+  useFocusedPolling(() => loadData(), PATIENTS_REFRESH_MS, !authLoading);
 
   const filteredPatients = useMemo(() => {
     if (!searchQuery.trim()) {

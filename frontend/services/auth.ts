@@ -11,6 +11,7 @@ export interface AuthUser {
   email: string;
   display_name: string;
   role: UserRole;
+  avatar_url?: string | null;
   access_token?: string;
 }
 
@@ -43,6 +44,12 @@ export interface UpdateProfilePayload {
 export interface ChangePasswordPayload {
   current_password: string;
   new_password: string;
+}
+
+export interface AvatarUploadPayload {
+  file_name: string;
+  mime_type: 'image/jpeg' | 'image/png' | 'image/webp';
+  file_data_base64: string;
 }
 
 function sanitizeOptionalProfilePayload(
@@ -130,6 +137,29 @@ class AuthService {
     return user?.access_token ?? null;
   }
 
+  async validateStoredSession(): Promise<AuthUser | null> {
+    const current = await this.getCurrentUser();
+    if (!current?.access_token) {
+      return current;
+    }
+
+    try {
+      const user = await apiClient.get<AuthUser>('/auth/me');
+      await this.persistUser({
+        ...user,
+        access_token: current.access_token,
+      });
+      return this.inMemoryUser;
+    } catch (error) {
+      const err = error as ApiError;
+      if (err.status === 401) {
+        await this.logout();
+        return null;
+      }
+      throw err;
+    }
+  }
+
   async updateProfile(payload: UpdateProfilePayload): Promise<AuthUser> {
     const user = await apiClient.patch<AuthUser>(
       '/auth/me',
@@ -144,6 +174,16 @@ class AuthService {
 
   async changePassword(payload: ChangePasswordPayload): Promise<void> {
     await apiClient.post('/auth/change-password', payload);
+  }
+
+  async uploadAvatar(payload: AvatarUploadPayload): Promise<AuthUser> {
+    const user = await apiClient.post<AuthUser>('/auth/me/avatar', payload);
+    await this.persistUser({
+      ...this.inMemoryUser,
+      ...user,
+      access_token: this.inMemoryUser?.access_token,
+    } as AuthUser);
+    return this.inMemoryUser!;
   }
 
   async logout(): Promise<void> {

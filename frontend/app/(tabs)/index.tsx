@@ -19,6 +19,7 @@ import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoad
 import { appointmentsService, type Appointment } from '@/services/appointments';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { useUnreadNotificationCount } from '@/src/shared/hooks/useUnreadNotificationCount';
+import { useFocusedPolling } from '@/src/shared/hooks/useFocusedPolling';
 import {
   doctorsService,
   type Doctor,
@@ -61,6 +62,8 @@ function formatDate(dateString: string) {
     year: 'numeric',
   });
 }
+
+const DASHBOARD_REFRESH_MS = 15_000;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -123,6 +126,8 @@ export default function HomeScreen() {
       }
     }, [authLoading, loadData]),
   );
+
+  useFocusedPolling(() => loadData(), DASHBOARD_REFRESH_MS, !authLoading);
 
   const onRefresh = () => {
     setRefreshing(true);

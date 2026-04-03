@@ -1,4 +1,5 @@
 import { apiClient } from './api';
+import { emitNotificationStateChanged } from '@/src/shared/services/notificationEvents';
 
 export type NotificationPriority = 'low' | 'normal' | 'high';
 
@@ -50,11 +51,14 @@ class NotificationsService {
   }
 
   async markRead(notificationId: string): Promise<AppNotificationItem> {
-    return apiClient.patch<AppNotificationItem>(`/notifications/${notificationId}/read`, {});
+    const item = await apiClient.patch<AppNotificationItem>(`/notifications/${notificationId}/read`, {});
+    emitNotificationStateChanged();
+    return item;
   }
 
   async markAllRead(): Promise<void> {
     await apiClient.patch('/notifications/read-all', {});
+    emitNotificationStateChanged();
   }
 
   async getPreferences(): Promise<NotificationPreferences> {
@@ -78,7 +82,9 @@ class NotificationsService {
   }
 
   async sendTest(): Promise<AppNotificationItem> {
-    return apiClient.post<AppNotificationItem>('/notifications/test', {});
+    const item = await apiClient.post<AppNotificationItem>('/notifications/test', {});
+    emitNotificationStateChanged();
+    return item;
   }
 }
 

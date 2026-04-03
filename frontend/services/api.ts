@@ -15,9 +15,28 @@ export interface ApiError {
 }
 
 let accessToken: string | null = null;
+let authExpiredHandler: (() => void | Promise<void>) | null = null;
+let authExpiryNotificationInFlight = false;
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
+}
+
+export function setAuthExpiredHandler(
+  handler: (() => void | Promise<void>) | null,
+): void {
+  authExpiredHandler = handler;
+}
+
+function notifyAuthExpired() {
+  if (!authExpiredHandler || authExpiryNotificationInFlight) {
+    return;
+  }
+
+  authExpiryNotificationInFlight = true;
+  Promise.resolve(authExpiredHandler()).finally(() => {
+    authExpiryNotificationInFlight = false;
+  });
 }
 
 class ApiClient {
@@ -79,6 +98,11 @@ class ApiClient {
           : typeof detail === 'string'
             ? detail
             : data.message || 'An error occurred';
+
+        if (response.status === 401 && message === 'Invalid or expired token' && accessToken) {
+          notifyAuthExpired();
+        }
+
         throw {
           message,
           status: response.status,

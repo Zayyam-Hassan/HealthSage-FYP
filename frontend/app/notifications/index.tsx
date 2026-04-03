@@ -1,25 +1,31 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
-  ScrollView,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { router } from 'expo-router';
 import Header from '@/components/Header';
 import Card from '@/components/Card';
 import { colors } from '@/constants/colors';
-import { sendTestNotification } from '@/services/notifications';
-import { presentTestNotificationOnDevice } from '@/src/shared/services/localNotifications';
 import {
-  loadCachedNotifications,
-  prependNotification,
-  markCachedNotificationRead,
-  subscribeInbox,
-  type CachedNotificationItem,
-} from '@/src/shared/services/notificationInboxStorage';
+  notificationsService,
+  type AppNotificationItem,
+} from '@/services/notifications';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
+import { useFocusedPolling } from '@/src/shared/hooks/useFocusedPolling';
+import {
+  emitNotificationStateChanged,
+  subscribeNotificationState,
+} from '@/src/shared/services/notificationEvents';
+
+const NOTIFICATION_REFRESH_MS = 12_000;
 
 function formatRelativeTime(iso: string) {
   const deltaMs = Date.now() - new Date(iso).getTime();
@@ -33,51 +39,92 @@ function formatRelativeTime(iso: string) {
 }
 
 export default function NotificationsScreen() {
-  const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<CachedNotificationItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
+  const [items, setItems] = useState<AppNotificationItem[]>([]);
   const [lastError, setLastError] = useState<string | null>(null);
 
-  const reloadFromStorage = useCallback(async () => {
-    setItems(await loadCachedNotifications());
+  const loadNotifications = useCallback(async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLastError(null);
+      }
+      const response = await notificationsService.list({ page: 1, limit: 50 });
+      setItems(response.items);
+      setLastError(null);
+    } catch (e: unknown) {
+      const message =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Unable to load notifications';
+      setLastError(message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
   useEffect(() => {
-    void reloadFromStorage();
-    return subscribeInbox(() => {
-      void reloadFromStorage();
+    void loadNotifications();
+    return subscribeNotificationState(() => {
+      void loadNotifications(true);
     });
-  }, [reloadFromStorage]);
+  }, [loadNotifications]);
 
-  const onPressNotification = useCallback(
-    async (id: string) => {
-      await markCachedNotificationRead(id);
-      await reloadFromStorage();
-    },
-    [reloadFromStorage],
+  useFocusEffect(
+    React.useCallback(() => {
+      void loadNotifications(true);
+    }, [loadNotifications]),
   );
 
-  const onSendTest = async () => {
-    setLoading(true);
-    setLastError(null);
+  useFocusedPolling(() => loadNotifications(true), NOTIFICATION_REFRESH_MS, !loading);
+
+  const onPressNotification = useCallback(async (item: AppNotificationItem) => {
     try {
-      const item = await sendTestNotification();
-      const next = await prependNotification(item);
-      setItems(next);
-      await presentTestNotificationOnDevice({
-        title: item.title,
-        body: item.message,
-        notificationId: item.id,
-      });
+      if (!item.read) {
+        await notificationsService.markRead(item.id);
+      }
+      if (item.href) {
+        router.push(item.href as never);
+      } else {
+        emitNotificationStateChanged();
+      }
     } catch (e: unknown) {
-      const msg =
+      const message =
         e && typeof e === 'object' && 'message' in e
           ? String((e as { message?: string }).message)
-          : 'Request failed';
-      setLastError(msg);
-    } finally {
-      setLoading(false);
+          : 'Unable to open notification';
+      setLastError(message);
     }
-  };
+  }, []);
+
+  const markAllRead = useCallback(async () => {
+    try {
+      setMarkingAllRead(true);
+      await notificationsService.markAllRead();
+      await loadNotifications(true);
+    } catch (e: unknown) {
+      const message =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Unable to mark notifications as read';
+      setLastError(message);
+    } finally {
+      setMarkingAllRead(false);
+    }
+  }, [loadNotifications]);
+
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
+        <Header variant="coral" title="Notifications" showBack />
+        <CenteredScreenLoader />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
@@ -85,27 +132,36 @@ export default function NotificationsScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              void loadNotifications(true);
+            }}
+            tintColor={colors.primary.main}
+            colors={[colors.primary.main]}
+          />
+        }
       >
         <View className="px-6 pt-8">
           <Card className="border-border/80 shadow-sm p-6 mb-6">
             <Text className="text-base text-text-secondary mb-4 leading-6">
-              The server creates a notification record; we save a copy on this device (AsyncStorage)
-              and show the same content as a system notification — no remote push required.
+              Real events appear here as they happen: patient requests, appointment changes, and shared reports.
             </Text>
             <TouchableOpacity
-              onPress={() => void onSendTest()}
-              disabled={loading}
+              onPress={() => void markAllRead()}
+              disabled={markingAllRead || items.every((item) => item.read)}
               activeOpacity={0.85}
-              className="rounded-2xl bg-primary py-4 items-center justify-center min-h-[52px]"
+              className="rounded-2xl bg-primary py-4 items-center justify-center min-h-[52px] disabled:opacity-50"
             >
-              {loading ? (
+              {markingAllRead ? (
                 <ActivityIndicator color={colors.primary.contrast} />
               ) : (
                 <Text
                   className="text-base font-semibold"
                   style={{ color: colors.primary.contrast }}
                 >
-                  Send test notification
+                  Mark all as read
                 </Text>
               )}
             </TouchableOpacity>
@@ -115,52 +171,52 @@ export default function NotificationsScreen() {
           </Card>
 
           <Text className="text-lg font-semibold text-text mb-3 px-1 tracking-tight">
-            On this device
+            Recent activity
           </Text>
           {items.length === 0 ? (
             <Card className="py-10 items-center border-border/80 bg-bg-card">
               <View className="w-14 h-14 rounded-2xl bg-primary/10 items-center justify-center mb-4 border border-primary/10">
                 <Ionicons name="notifications-outline" size={28} color={colors.primary.main} />
               </View>
-              <Text className="text-base font-semibold text-text mb-1">Nothing cached yet</Text>
+              <Text className="text-base font-semibold text-text mb-1">Nothing yet</Text>
               <Text className="text-sm text-text-secondary text-center px-4 leading-5">
-                Send a test to store one here and trigger the OS banner.
+                New patient requests, appointment updates, and report alerts will show up here.
               </Text>
             </Card>
           ) : (
-            items.map((n) => (
+            items.map((item) => (
               <Card
-                key={`${n.id}-${n.createdAt}`}
-                onPress={() => void onPressNotification(n.id)}
+                key={`${item.id}-${item.createdAt}`}
+                onPress={() => void onPressNotification(item)}
                 className={`mb-3 border-border/80 ${
-                  n.read ? 'bg-bg-card' : 'bg-primary border-primary/60'
+                  item.read ? 'bg-bg-card' : 'bg-primary border-primary/60'
                 }`}
               >
                 <View className="flex-row items-start justify-between">
                   <View className="flex-1 pr-3">
                     <Text
                       className={`text-base font-semibold mb-1 ${
-                        n.read ? 'text-text-secondary' : 'text-white'
+                        item.read ? 'text-text-secondary' : 'text-white'
                       }`}
                     >
-                      {n.title}
+                      {item.title}
                     </Text>
                     <Text
                       className={`text-sm leading-5 mb-2 ${
-                        n.read ? 'text-text-secondary' : 'text-primary-contrast'
+                        item.read ? 'text-text-secondary' : 'text-primary-contrast'
                       }`}
                     >
-                      {n.message}
+                      {item.message}
                     </Text>
                     <Text
                       className={`text-xs ${
-                        n.read ? 'text-text-tertiary' : 'text-white/80'
+                        item.read ? 'text-text-tertiary' : 'text-white/80'
                       }`}
                     >
-                      {formatRelativeTime(n.createdAt)}
+                      {formatRelativeTime(item.createdAt)}
                     </Text>
                   </View>
-                  {!n.read ? (
+                  {!item.read ? (
                     <View className="mt-1 ml-2 w-2 h-2 rounded-full bg-white/85" />
                   ) : null}
                 </View>
