@@ -5,6 +5,8 @@
 
 export interface PatientFormValues {
   patient_id: string;
+  /** Display name; required when creating a patient (doctor flow). */
+  full_name?: string;
   age: number | string;
   gender: "Male" | "Female" | "Other" | "";
   height_cm?: number | string;
@@ -42,6 +44,7 @@ export interface PatientFormValues {
  */
 export interface PatientFormErrors {
   patient_id?: string;
+  full_name?: string;
   age?: string;
   gender?: string;
   height_cm?: string;

@@ -11,16 +11,19 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import AppDialog from '@/components/AppDialog';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Header from '@/components/Header';
+import SuccessPopup from '@/components/SuccessPopup';
 import { colors } from '@/constants/colors';
-import { useAuth } from '@/src/features/auth/hooks/useAuth';
-
+import { authService } from '@/services/auth';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 export default function ChangePasswordScreen() {
   const router = useRouter();
-  const { role } = useAuth();
+  const { dialog, hideDialog, showDialog } = useAppDialog();
   const [loading, setLoading] = useState(false);
+  const [successVisible, setSuccessVisible] = useState(false);
   const [passwords, setPasswords] = useState({
     currentPassword: '',
     newPassword: '',
@@ -58,11 +61,16 @@ export default function ChangePasswordScreen() {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (!validateForm()) return;
 
-    setLoading(true);
-    setTimeout(() => {
+    try {
+      setLoading(true);
+      await authService.changePassword({
+        current_password: passwords.currentPassword,
+        new_password: passwords.newPassword,
+      });
+
       setLoading(false);
       setPasswords({
         currentPassword: '',
@@ -70,9 +78,12 @@ export default function ChangePasswordScreen() {
         confirmPassword: '',
       });
       setErrors({});
-      alert('Password changed successfully!');
-      router.back();
-    }, 1500);
+      setSuccessVisible(true);
+    } catch (error: any) {
+      showDialog('Unable to change password', error.message || 'Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const updatePassword = (field: string, value: string) => {
@@ -88,6 +99,22 @@ export default function ChangePasswordScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
+      <AppDialog
+        visible={dialog.visible}
+        title={dialog.title}
+        message={dialog.message}
+        actions={dialog.actions}
+        onClose={hideDialog}
+      />
+      <SuccessPopup
+        visible={successVisible}
+        message="Your password has been updated."
+        onClose={() => {
+          setSuccessVisible(false);
+          router.back();
+        }}
+        duration={2800}
+      />
       <Header
         variant="coral"
         title="Change password"

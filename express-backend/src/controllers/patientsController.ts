@@ -133,7 +133,7 @@ export async function createPatient(req: Request, res: Response): Promise<void> 
 
   const patient = await Patient.create({
     patient_id: body.patient_id?.trim() || undefined,
-    full_name: body.full_name?.trim() || body.patient_id?.trim() || 'New Patient',
+    full_name: body.full_name?.trim() || 'New Patient',
     ...buildPatientUpdate(body),
   });
 

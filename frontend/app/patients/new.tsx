@@ -14,6 +14,7 @@ export default function NewPatientScreen() {
   const router = useRouter();
   const [formData, setFormData] = useState<PatientFormValues>({
     patient_id: '',
+    full_name: '',
     age: '',
     gender: '',
     lab_tests: {},
@@ -29,7 +30,7 @@ export default function NewPatientScreen() {
   const handlers = useMemo(() => createClinicalFormHandlers(setFormData, setErrors), []);
 
   const handleSave = async () => {
-    const validationErrors = validatePatientForm(formData);
+    const validationErrors = validatePatientForm(formData, { requireFullName: true });
     setErrors(validationErrors);
 
     if (hasValidationErrors(validationErrors)) {

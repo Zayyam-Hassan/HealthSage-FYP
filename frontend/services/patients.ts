@@ -83,7 +83,7 @@ function toBackendPatientPayload(data: PatientFormValues) {
 
   return {
     patient_id: data.patient_id?.trim() || undefined,
-    full_name: data.patient_id?.trim() || undefined,
+    full_name: data.full_name?.trim() || undefined,
     age: parseNumber(data.age),
     gender: data.gender || undefined,
     height_cm: parseNumber(data.height_cm),

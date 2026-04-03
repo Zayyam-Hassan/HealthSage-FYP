@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import AppDialog from '@/components/AppDialog';
 import Avatar from '@/components/Avatar';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
@@ -21,10 +21,12 @@ import { authService } from '@/services/auth';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { doctorsService } from '@/services/doctors';
 import { patientsService } from '@/services/patients';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 
 export default function EditProfileScreen() {
   const router = useRouter();
   const { user: authUser, role, isLoading: authLoading, refreshUser } = useAuth();
+  const { dialog, hideDialog, showDialog } = useAppDialog();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -80,7 +82,7 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     if (!form.display_name.trim() || !form.email.trim()) {
-      Alert.alert('Missing details', 'Name and email are required.');
+      showDialog('Missing details', 'Name and email are required.');
       return;
     }
 
@@ -98,11 +100,11 @@ export default function EditProfileScreen() {
 
       await refreshUser();
 
-      Alert.alert('Profile updated', 'Your information has been saved successfully.', [
-        { text: 'OK', onPress: () => router.back() },
+      showDialog('Profile updated', 'Your information has been saved successfully.', [
+        { label: 'OK', onPress: () => router.back() },
       ]);
     } catch (error: any) {
-      Alert.alert('Unable to save', error.message || 'Please try again.');
+      showDialog('Unable to save', error.message || 'Please try again.');
     } finally {
       setSaving(false);
     }
@@ -123,6 +125,13 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
+      <AppDialog
+        visible={dialog.visible}
+        title={dialog.title}
+        message={dialog.message}
+        actions={dialog.actions}
+        onClose={hideDialog}
+      />
       <Header
         variant="coral"
         title="Edit profile"

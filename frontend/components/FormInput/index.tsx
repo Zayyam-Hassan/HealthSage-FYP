@@ -13,6 +13,7 @@ interface FormInputProps {
   multiline?: boolean;
   numberOfLines?: number;
   className?: string;
+  disabled?: boolean;
 }
 
 const FormInput: React.FC<FormInputProps> = ({
@@ -27,6 +28,7 @@ const FormInput: React.FC<FormInputProps> = ({
   multiline = false,
   numberOfLines = 1,
   className = '',
+  disabled = false,
 }) => {
   return (
     <Input
@@ -41,6 +43,7 @@ const FormInput: React.FC<FormInputProps> = ({
       multiline={multiline}
       numberOfLines={numberOfLines}
       className={className}
+      disabled={disabled}
     />
   );
 };

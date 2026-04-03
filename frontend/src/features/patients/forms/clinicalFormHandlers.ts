@@ -23,6 +23,11 @@ export function createClinicalFormHandlers(setFormData: SetForm, setErrors: SetE
     setErrors((e) => ({ ...e, patient_id: undefined }));
   };
 
+  const updateFullName = (text: string) => {
+    setFormData((f) => ({ ...f, full_name: text }));
+    setErrors((e) => ({ ...e, full_name: undefined }));
+  };
+
   const updateAge = (text: string) => {
     setFormData((f) => ({ ...f, age: text }));
     setErrors((e) => ({ ...e, age: undefined }));
@@ -110,6 +115,7 @@ export function createClinicalFormHandlers(setFormData: SetForm, setErrors: SetE
 
   return {
     updatePatientId,
+    updateFullName,
     updateAge,
     updateGender,
     updateHeightCm,

@@ -1,10 +1,26 @@
 import { PatientFormValues, PatientFormErrors } from '@/interfaces/patient';
 
+export type ValidatePatientFormOptions = {
+  /** Doctor "Add patient" flow: require a real name separate from patient ID. */
+  requireFullName?: boolean;
+};
+
 /**
  * Validates patient form data according to the specified rules
  */
-export const validatePatientForm = (formData: PatientFormValues): PatientFormErrors => {
+export const validatePatientForm = (
+  formData: PatientFormValues,
+  options?: ValidatePatientFormOptions,
+): PatientFormErrors => {
   const errors: PatientFormErrors = {};
+
+  if (options?.requireFullName) {
+    if (!formData.full_name?.trim()) {
+      errors.full_name = 'Full name is required';
+    } else if (formData.full_name.trim().length > 200) {
+      errors.full_name = 'Full name must be at most 200 characters';
+    }
+  }
 
   // Required fields validation
   // patient_id
@@ -137,7 +153,7 @@ export const validatePatientForm = (formData: PatientFormValues): PatientFormErr
  * Check if form has any validation errors
  */
 export const hasValidationErrors = (errors: PatientFormErrors): boolean => {
-  if (errors.patient_id || errors.age || errors.gender || errors.conditions) {
+  if (errors.patient_id || errors.full_name || errors.age || errors.gender || errors.conditions) {
     return true;
   }
   if (errors.lab_tests && Object.keys(errors.lab_tests).length > 0) {

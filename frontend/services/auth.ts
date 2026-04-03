@@ -40,6 +40,41 @@ export interface UpdateProfilePayload {
   full_name?: string;
 }
 
+export interface ChangePasswordPayload {
+  current_password: string;
+  new_password: string;
+}
+
+function sanitizeOptionalProfilePayload(
+  payload: UpdateProfilePayload,
+): UpdateProfilePayload {
+  const next: UpdateProfilePayload = {};
+  const assignValue = <K extends keyof UpdateProfilePayload>(
+    key: K,
+    value: UpdateProfilePayload[K],
+  ) => {
+    next[key] = value;
+  };
+
+  Object.entries(payload).forEach(([key, value]) => {
+    const typedKey = key as keyof UpdateProfilePayload;
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        assignValue(typedKey, trimmed as UpdateProfilePayload[typeof typedKey]);
+      }
+      return;
+    }
+
+    if (value !== undefined) {
+      assignValue(typedKey, value as UpdateProfilePayload[typeof typedKey]);
+    }
+  });
+
+  return next;
+}
+
 class AuthService {
   private inMemoryUser: AuthUser | null = null;
 
@@ -96,12 +131,19 @@ class AuthService {
   }
 
   async updateProfile(payload: UpdateProfilePayload): Promise<AuthUser> {
-    const user = await apiClient.patch<AuthUser>('/auth/me', payload);
+    const user = await apiClient.patch<AuthUser>(
+      '/auth/me',
+      sanitizeOptionalProfilePayload(payload),
+    );
     await this.persistUser({
       ...user,
       access_token: this.inMemoryUser?.access_token,
     });
     return this.inMemoryUser!;
+  }
+
+  async changePassword(payload: ChangePasswordPayload): Promise<void> {
+    await apiClient.post('/auth/change-password', payload);
   }
 
   async logout(): Promise<void> {

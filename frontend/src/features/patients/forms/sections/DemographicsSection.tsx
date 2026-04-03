@@ -28,13 +28,22 @@ export function DemographicsSection({ mode, formData, errors, handlers }: Props)
         </View>
 
         <FormInput
-          label="Name or ID"
+          label="Full name"
+          value={formData.full_name ?? ''}
+          onChangeText={handlers.updateFullName}
+          placeholder="e.g. Jane Doe"
+          required
+          error={errors.full_name}
+        />
+
+        <FormInput
+          label="Patient ID"
           value={formData.patient_id}
           onChangeText={handlers.updatePatientId}
           placeholder="UoM2301 or Patient123"
           required
           error={errors.patient_id}
-          helperText="Example: UoM2301 or Patient123"
+          helperText="External or clinic identifier (separate from display name)"
         />
 
         <View className="flex-row gap-3">
@@ -116,6 +125,8 @@ export function DemographicsSection({ mode, formData, errors, handlers }: Props)
         placeholder="Profile identifier"
         required
         error={errors.patient_id}
+        disabled
+        helperText="Patient ID cannot be changed here. Contact your clinic if it is wrong."
       />
       <View className="flex-row gap-3">
         <View className="flex-1">

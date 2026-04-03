@@ -22,14 +22,35 @@ const LoginSchema = z.object({
   password: z.string().min(1),
 });
 
+const optionalTrimmedString = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().optional());
+
 const UpdateProfileSchema = z.object({
-  display_name: z.string().min(1).optional(),
-  email: z.string().email().optional(),
-  phone: z.string().min(1).optional(),
-  specialization: z.string().min(1).optional(),
-  bio: z.string().min(1).optional(),
+  display_name: optionalTrimmedString,
+  email: z.preprocess((value) => {
+    if (typeof value !== 'string') {
+      return value;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, z.string().email().optional()),
+  phone: optionalTrimmedString,
+  specialization: optionalTrimmedString,
+  bio: optionalTrimmedString,
   accepting_patients: z.boolean().optional(),
-  full_name: z.string().min(1).optional(),
+  full_name: optionalTrimmedString,
+});
+
+const ChangePasswordSchema = z.object({
+  current_password: z.string().min(1),
+  new_password: z.string().min(8),
 });
 
 function toAuthUser(doc: { id: string; email: string; display_name: string; role: UserRole }) {
@@ -292,3 +313,45 @@ export async function updateMe(req: Request, res: Response): Promise<void> {
   res.json(authUser);
 }
 
+export async function changePassword(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(StatusCodes.UNAUTHORIZED).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const parse = ChangePasswordSchema.safeParse(req.body);
+  if (!parse.success) {
+    res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({
+      message: 'Invalid password payload',
+      detail: parse.error.flatten(),
+    });
+    return;
+  }
+
+  const user = await User.findById(req.user.sub);
+  if (!user || user.disabled) {
+    res.status(StatusCodes.UNAUTHORIZED).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  const { current_password, new_password } = parse.data;
+
+  const matchesCurrent = await bcrypt.compare(current_password, user.hashed_password);
+  if (!matchesCurrent) {
+    res.status(StatusCodes.UNAUTHORIZED).json({ message: 'Current password is incorrect' });
+    return;
+  }
+
+  const isSamePassword = await bcrypt.compare(new_password, user.hashed_password);
+  if (isSamePassword) {
+    res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({
+      message: 'New password must be different from current password',
+    });
+    return;
+  }
+
+  user.hashed_password = await bcrypt.hash(new_password, 12);
+  await user.save();
+
+  res.json({ message: 'Password updated successfully' });
+}
