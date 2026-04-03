@@ -101,7 +101,8 @@ export async function downloadUploadedReport(req: Request, res: Response): Promi
     const file = await getUploadedReportBlob(req.user!.role, req.user!.sub, req.params.reportId);
     res.setHeader('Content-Type', file.mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${file.fileName}"`);
-    res.sendFile(file.path);
+    res.setHeader('Content-Length', String(file.buffer.length));
+    res.send(file.buffer);
   } catch (error) {
     handleError(res, error);
   }

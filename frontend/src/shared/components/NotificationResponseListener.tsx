@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
-import { router } from 'expo-router';
 import { notificationsService } from '@/services/notifications';
 import { emitNotificationStateChanged } from '@/src/shared/services/notificationEvents';
 
@@ -34,15 +33,6 @@ export function NotificationResponseListener() {
 
         emitNotificationStateChanged();
 
-        // Optional deep-link support if you add `href` to notification `data`.
-        const href = typeof data?.href === 'string' ? data.href : null;
-        if (href) {
-          try {
-            router.push(href as never);
-          } catch {
-            // ignore
-          }
-        }
       };
 
       try {

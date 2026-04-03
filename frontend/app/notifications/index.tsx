@@ -10,7 +10,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { router } from 'expo-router';
 import Header from '@/components/Header';
 import Card from '@/components/Card';
 import { colors } from '@/constants/colors';
@@ -87,11 +86,7 @@ export default function NotificationsScreen() {
       if (!item.read) {
         await notificationsService.markRead(item.id);
       }
-      if (item.href) {
-        router.push(item.href as never);
-      } else {
-        emitNotificationStateChanged();
-      }
+      emitNotificationStateChanged();
     } catch (e: unknown) {
       const message =
         e && typeof e === 'object' && 'message' in e

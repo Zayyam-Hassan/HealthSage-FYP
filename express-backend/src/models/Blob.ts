@@ -6,6 +6,7 @@ export interface BlobDocument extends Document {
   filename: string;
   content_type: string;
   size_bytes: number;
+  data_buffer?: Buffer | null;
   uploaded_by?: mongoose.Types.ObjectId;
   created_at: Date;
 }
@@ -17,6 +18,7 @@ const BlobSchema = new Schema<BlobDocument>(
     filename: { type: String, required: true },
     content_type: { type: String, required: true },
     size_bytes: { type: Number, required: true },
+    data_buffer: { type: Buffer, default: null },
     uploaded_by: { type: Schema.Types.ObjectId, ref: 'User' },
     created_at: { type: Date, default: () => new Date() },
   },

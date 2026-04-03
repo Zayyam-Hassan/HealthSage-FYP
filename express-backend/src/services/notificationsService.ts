@@ -11,6 +11,7 @@ import { Patient } from '../models/Patient';
 import { User } from '../models/User';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const ANDROID_CHANNEL_ID = 'healthsage-default';
 
 export interface NotificationApiItem {
   id: string;
@@ -107,6 +108,8 @@ async function sendPushToUserDevices(
     title: notification.title,
     body: notification.message,
     sound: 'default',
+    priority: 'high',
+    ...(device.platform === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
     data: {
       id: notification.id,
       type: notification.type,
@@ -142,7 +145,10 @@ export async function createNotification(
   });
 
   if (input.sendPush !== false) {
-    void sendPushToUserDevices(notification.recipient_user_id, notification);
+    // On serverless platforms, fire-and-forget work can be dropped once the
+    // HTTP response completes. Await the Expo dispatch so real domain events
+    // reliably leave the function before Vercel freezes the invocation.
+    await sendPushToUserDevices(notification.recipient_user_id, notification);
   }
 
   return mapNotification(notification);

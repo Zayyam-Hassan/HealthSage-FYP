@@ -292,8 +292,7 @@ async function writeUploadedFile(
   fileDataBase64: string,
   uploadedByUserId: mongoose.Types.ObjectId,
 ): Promise<BlobDocument> {
-  const extension = SUPPORTED_UPLOAD_TYPES[mimeType.toLowerCase()];
-  if (!extension) {
+  if (!SUPPORTED_UPLOAD_TYPES[mimeType.toLowerCase()]) {
     throw new ReportModuleError(
       StatusCodes.UNPROCESSABLE_ENTITY,
       'Unsupported file type. Only PDF, JPG, JPEG, and PNG are allowed',
@@ -323,23 +322,15 @@ async function writeUploadedFile(
   }
 
   const blob = new BlobModel({
-    storage_backend: 'local',
+    storage_backend: 'mongo',
     storage_key: 'pending',
     filename: fileName,
     content_type: mimeType,
     size_bytes: buffer.length,
+    data_buffer: buffer,
     uploaded_by: uploadedByUserId,
   });
-  await blob.save();
-
-  const reportsDir = path.join(process.cwd(), 'uploaded-reports');
-  await fs.promises.mkdir(reportsDir, { recursive: true });
-  const safeExtension = path.extname(fileName).replace('.', '').trim() || extension;
-  const relativeKey = path.join('uploaded-reports', `${blob.id}.${safeExtension}`);
-  const filePath = path.join(process.cwd(), relativeKey);
-  await fs.promises.writeFile(filePath, buffer);
-
-  blob.storage_key = relativeKey;
+  blob.storage_key = `mongo:${blob.id}`;
   await blob.save();
   return blob;
 }
@@ -516,7 +507,7 @@ export async function deleteUploadedReportById(
 ) {
   const report = await getAccessibleUploadedReport(userRole, userId, reportId);
   const blob = await BlobModel.findById(report.blob_id);
-  if (blob?.storage_key) {
+  if (blob?.storage_backend === 'local' && blob.storage_key) {
     const filePath = path.join(process.cwd(), blob.storage_key);
     await fs.promises.unlink(filePath).catch(() => null);
   }
@@ -533,15 +524,28 @@ export async function getUploadedReportBlob(
 ) {
   const report = await getAccessibleUploadedReport(userRole, userId, reportId);
   const blob = await BlobModel.findById(report.blob_id);
-  if (!blob?.storage_key) {
+  if (!blob) {
     throw new ReportModuleError(StatusCodes.NOT_FOUND, 'Uploaded report file not found');
   }
+
+  if (blob.data_buffer?.length) {
+    return {
+      buffer: Buffer.from(blob.data_buffer),
+      fileName: report.file_name,
+      mimeType: report.mime_type,
+    };
+  }
+
+  if (!blob.storage_key) {
+    throw new ReportModuleError(StatusCodes.NOT_FOUND, 'Uploaded report file not found');
+  }
+
   const filePath = path.join(process.cwd(), blob.storage_key);
   if (!fs.existsSync(filePath)) {
     throw new ReportModuleError(StatusCodes.NOT_FOUND, 'Uploaded report file not found');
   }
   return {
-    path: filePath,
+    buffer: await fs.promises.readFile(filePath),
     fileName: report.file_name,
     mimeType: report.mime_type,
   };
