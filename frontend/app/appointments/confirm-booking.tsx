@@ -15,6 +15,7 @@ import BookingSuccessModal from '@/components/BookingSuccessModal';
 import { colors } from '@/constants/colors';
 import { appointmentsService, type AppointmentSlot } from '@/services/appointments';
 import { doctorsService, type Doctor } from '@/services/doctors';
+import { useFocusedPolling } from '@/src/shared/hooks/useFocusedPolling';
 import { formatApiError } from '@/src/shared/utils/formatApiError';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import AppointmentMonthCalendar, {
@@ -23,6 +24,7 @@ import AppointmentMonthCalendar, {
 
 /** Match reference: same minute options as design */
 const REMINDER_OPTIONS = [30, 40, 25, 10, 35] as const;
+const PUBLIC_SLOTS_REFRESH_MS = 15_000;
 
 /** Calendar day key for grouping — prefer server `slot_date` so it matches the grid and DB day. */
 function slotCalendarDateKey(s: AppointmentSlot): string {
@@ -85,11 +87,13 @@ export default function ConfirmBookingScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (showLoader = true) => {
     if (!doctorId) return;
     try {
       setError(null);
-      setLoading(true);
+      if (showLoader) {
+        setLoading(true);
+      }
       const [doc, slotsRes] = await Promise.all([
         doctorsService.getDoctor(doctorId),
         appointmentsService.getDoctorPublicSlots(doctorId, { days_ahead: 30 }),
@@ -130,13 +134,17 @@ export default function ConfirmBookingScreen() {
     } catch (err: unknown) {
       setError(formatApiError(err, 'Could not load booking details.'));
     } finally {
-      setLoading(false);
+      if (showLoader) {
+        setLoading(false);
+      }
     }
   }, [doctorId, slotIdParam]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
+
+  useFocusedPolling(() => load(false), PUBLIC_SLOTS_REFRESH_MS, Boolean(doctorId));
 
   const slotsByDate = useMemo(() => {
     const map = new Map<string, AppointmentSlot[]>();

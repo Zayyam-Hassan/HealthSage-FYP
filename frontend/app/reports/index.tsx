@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
@@ -30,6 +31,11 @@ import ReportsRecordFilterBar, {
 import SuccessPopup from '@/components/SuccessPopup';
 import { colors } from '@/constants/colors';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
+import { useFocusedPolling } from '@/src/shared/hooks/useFocusedPolling';
+import {
+  isReportNotificationType,
+  subscribeNotificationEvents,
+} from '@/src/shared/services/notificationEvents';
 import { doctorsService } from '@/services/doctors';
 import { type Patient } from '@/services/patients';
 import {
@@ -74,6 +80,7 @@ type UploadDialogState = {
 };
 
 const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
+const REPORTS_REFRESH_MS = 15_000;
 
 function formatDate(value: string | Date) {
   const d = typeof value === 'string' ? new Date(value) : value;
@@ -148,6 +155,7 @@ function defaultCategory(role: 'patient' | 'doctor' | null): UploadedReportCateg
 
 export default function ReportsScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { patientId: queryPatientId } = useLocalSearchParams<{ patientId?: string }>();
   const { user, role, refreshUser, isLoading: authLoading } = useAuth();
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -272,6 +280,28 @@ export default function ReportsScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      void loadData();
+    }, [loadData]),
+  );
+
+  useFocusedPolling(() => loadData(), REPORTS_REFRESH_MS, !authLoading);
+
+  useEffect(() => {
+    if (!isFocused || authLoading) {
+      return undefined;
+    }
+
+    return subscribeNotificationEvents((event) => {
+      if (event.kind !== 'received' || !isReportNotificationType(event.type)) {
+        return;
+      }
+
+      void loadData().catch(() => undefined);
+    });
+  }, [authLoading, isFocused, loadData]);
 
   const applyPickedFile = async (file: PickedFile) => {
     setPickedFile(file);

@@ -21,6 +21,7 @@ import {
   updateLifestylePlanForDoctor,
   updatePrescriptionForDoctor,
 } from '../services/treatmentService';
+import { createNotificationForPatientProfile } from '../services/notificationsService';
 
 const MedicationItemSchema = z.object({
   medication_name: z.string().min(1).max(160),
@@ -77,6 +78,18 @@ export async function createDoctorPrescription(req: Request, res: Response): Pro
       req.params.patientId,
       payload,
     );
+    await createNotificationForPatientProfile(item.patient_id, {
+      type: 'prescription_created',
+      title: 'New prescription available',
+      message: `${item.doctor_name ?? 'Your doctor'} created a new prescription for you.`,
+      href: '/doctor-treatment-plan',
+      data: {
+        prescription_id: item.id,
+        patient_id: item.patient_id,
+        doctor_id: item.doctor_id,
+        medication_count: item.medications.length,
+      },
+    }).catch(() => null);
     res.status(StatusCodes.CREATED).json(item);
   } catch (error) {
     handleError(res, error);
@@ -113,13 +126,24 @@ export async function updateDoctorPrescription(
 ): Promise<void> {
   try {
     const payload = PrescriptionSchema.parse(req.body);
-    res.json(
-      await updatePrescriptionForDoctor(
-        req.user!.sub,
-        req.params.prescriptionId,
-        payload,
-      ),
+    const item = await updatePrescriptionForDoctor(
+      req.user!.sub,
+      req.params.prescriptionId,
+      payload,
     );
+    await createNotificationForPatientProfile(item.patient_id, {
+      type: 'prescription_updated',
+      title: 'Prescription updated',
+      message: `${item.doctor_name ?? 'Your doctor'} updated your prescription.`,
+      href: '/doctor-treatment-plan',
+      data: {
+        prescription_id: item.id,
+        patient_id: item.patient_id,
+        doctor_id: item.doctor_id,
+        medication_count: item.medications.length,
+      },
+    }).catch(() => null);
+    res.json(item);
   } catch (error) {
     handleError(res, error);
   }
@@ -130,9 +154,22 @@ export async function discontinueDoctorPrescription(
   res: Response,
 ): Promise<void> {
   try {
-    res.json(
-      await discontinuePrescriptionForDoctor(req.user!.sub, req.params.prescriptionId),
+    const item = await discontinuePrescriptionForDoctor(
+      req.user!.sub,
+      req.params.prescriptionId,
     );
+    await createNotificationForPatientProfile(item.patient_id, {
+      type: 'prescription_discontinued',
+      title: 'Prescription discontinued',
+      message: `${item.doctor_name ?? 'Your doctor'} marked your prescription as discontinued.`,
+      href: '/doctor-treatment-plan',
+      data: {
+        prescription_id: item.id,
+        patient_id: item.patient_id,
+        doctor_id: item.doctor_id,
+      },
+    }).catch(() => null);
+    res.json(item);
   } catch (error) {
     handleError(res, error);
   }
@@ -149,6 +186,17 @@ export async function createDoctorLifestylePlan(
       req.params.patientId,
       payload,
     );
+    await createNotificationForPatientProfile(item.patient_id, {
+      type: 'lifestyle_plan_created',
+      title: 'New lifestyle guidance available',
+      message: `${item.doctor_name ?? 'Your doctor'} created a new lifestyle plan for you.`,
+      href: '/doctor-treatment-plan',
+      data: {
+        plan_id: item.id,
+        patient_id: item.patient_id,
+        doctor_id: item.doctor_id,
+      },
+    }).catch(() => null);
     res.status(StatusCodes.CREATED).json(item);
   } catch (error) {
     handleError(res, error);
@@ -185,9 +233,23 @@ export async function updateDoctorLifestylePlan(
 ): Promise<void> {
   try {
     const payload = LifestylePlanSchema.parse(req.body);
-    res.json(
-      await updateLifestylePlanForDoctor(req.user!.sub, req.params.planId, payload),
+    const item = await updateLifestylePlanForDoctor(
+      req.user!.sub,
+      req.params.planId,
+      payload,
     );
+    await createNotificationForPatientProfile(item.patient_id, {
+      type: 'lifestyle_plan_updated',
+      title: 'Lifestyle plan updated',
+      message: `${item.doctor_name ?? 'Your doctor'} updated your lifestyle guidance.`,
+      href: '/doctor-treatment-plan',
+      data: {
+        plan_id: item.id,
+        patient_id: item.patient_id,
+        doctor_id: item.doctor_id,
+      },
+    }).catch(() => null);
+    res.json(item);
   } catch (error) {
     handleError(res, error);
   }
@@ -198,7 +260,19 @@ export async function discontinueDoctorLifestylePlan(
   res: Response,
 ): Promise<void> {
   try {
-    res.json(await discontinueLifestylePlanForDoctor(req.user!.sub, req.params.planId));
+    const item = await discontinueLifestylePlanForDoctor(req.user!.sub, req.params.planId);
+    await createNotificationForPatientProfile(item.patient_id, {
+      type: 'lifestyle_plan_discontinued',
+      title: 'Lifestyle plan discontinued',
+      message: `${item.doctor_name ?? 'Your doctor'} marked your lifestyle plan as discontinued.`,
+      href: '/doctor-treatment-plan',
+      data: {
+        plan_id: item.id,
+        patient_id: item.patient_id,
+        doctor_id: item.doctor_id,
+      },
+    }).catch(() => null);
+    res.json(item);
   } catch (error) {
     handleError(res, error);
   }

@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import {
+  NOTIFICATION_ACTION_MARK_READ,
+  NOTIFICATION_CATEGORY_ID,
   parseNotificationRuntimeEvent,
   shouldSuppressForegroundNotification,
 } from '@/src/shared/services/notificationEvents';
@@ -57,6 +59,16 @@ export async function initializeLocalNotifications(): Promise<void> {
     });
   }
 
+  await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORY_ID, [
+    {
+      identifier: NOTIFICATION_ACTION_MARK_READ,
+      buttonTitle: 'Mark as read',
+      options: {
+        opensAppToForeground: false,
+      },
+    },
+  ]);
+
   // Expo Go can show local notifications, but we still must ensure permissions.
   const Device = await import('expo-device');
   if (!Device.isDevice) return;
@@ -84,6 +96,7 @@ export async function presentTestNotificationOnDevice(input: {
       body: input.body,
       sound: true,
       data: { notificationId: input.notificationId },
+      categoryIdentifier: NOTIFICATION_CATEGORY_ID,
       ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
     },
     trigger: null as any,

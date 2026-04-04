@@ -62,4 +62,3 @@ export async function unregisterCurrentDevice(): Promise<void> {
   await notificationsService.unregisterDevice(token).catch(() => undefined);
   await AsyncStorage.removeItem(STORED_EXPO_PUSH_TOKEN_KEY).catch(() => undefined);
 }
-

@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { colors } from '@/constants/colors';
 import { images } from '@/constants/images';
 import Card from '@/components/Card';
@@ -20,6 +20,10 @@ import { appointmentsService, type Appointment } from '@/services/appointments';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { useUnreadNotificationCount } from '@/src/shared/hooks/useUnreadNotificationCount';
 import { useFocusedPolling } from '@/src/shared/hooks/useFocusedPolling';
+import {
+  isDashboardRefreshNotificationType,
+  subscribeNotificationEvents,
+} from '@/src/shared/services/notificationEvents';
 import {
   doctorsService,
   type Doctor,
@@ -68,6 +72,7 @@ const DASHBOARD_REFRESH_MS = 15_000;
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const { user, role: userRole, refreshUser, isLoading: authLoading } = useAuth();
   const { count: unreadNotifications } = useUnreadNotificationCount();
   const userDisplayName = user?.display_name?.trim() ?? '';
@@ -128,6 +133,20 @@ export default function HomeScreen() {
   );
 
   useFocusedPolling(() => loadData(), DASHBOARD_REFRESH_MS, !authLoading);
+
+  useEffect(() => {
+    if (!isFocused || authLoading) {
+      return undefined;
+    }
+
+    return subscribeNotificationEvents((event) => {
+      if (event.kind !== 'received' || !isDashboardRefreshNotificationType(event.type)) {
+        return;
+      }
+
+      void loadData().catch(() => undefined);
+    });
+  }, [authLoading, isFocused, loadData]);
 
   const onRefresh = () => {
     setRefreshing(true);

@@ -12,6 +12,7 @@ import { User } from '../models/User';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const ANDROID_CHANNEL_ID = 'healthsage-default';
+const NOTIFICATION_CATEGORY_ID = 'healthsage-default-actions';
 
 export interface NotificationApiItem {
   id: string;
@@ -110,8 +111,10 @@ async function sendPushToUserDevices(
     sound: 'default',
     priority: 'high',
     ...(device.platform === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
+    categoryId: NOTIFICATION_CATEGORY_ID,
     data: {
       id: notification.id,
+      notificationId: notification.id,
       type: notification.type,
       href: notification.href ?? undefined,
       ...((notification.data as Record<string, unknown> | null) ?? {}),

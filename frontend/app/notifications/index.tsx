@@ -4,14 +4,14 @@ import {
   RefreshControl,
   ScrollView,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import Header from '@/components/Header';
+import AppDialog from '@/components/AppDialog';
 import Card from '@/components/Card';
+import Header from '@/components/Header';
 import { colors } from '@/constants/colors';
 import {
   notificationsService,
@@ -19,6 +19,7 @@ import {
 } from '@/services/notifications';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { useFocusedPolling } from '@/src/shared/hooks/useFocusedPolling';
+import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import {
   emitNotificationStateChanged,
   subscribeNotificationState,
@@ -38,6 +39,7 @@ function formatRelativeTime(iso: string) {
 }
 
 export default function NotificationsScreen() {
+  const { dialog, hideDialog } = useAppDialog();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [markingAllRead, setMarkingAllRead] = useState(false);
@@ -91,7 +93,7 @@ export default function NotificationsScreen() {
       const message =
         e && typeof e === 'object' && 'message' in e
           ? String((e as { message?: string }).message)
-          : 'Unable to open notification';
+          : 'Unable to mark notification as read';
       setLastError(message);
     }
   }, []);
@@ -121,8 +123,17 @@ export default function NotificationsScreen() {
     );
   }
 
+  const allRead = items.length === 0 || items.every((item) => item.read);
+
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
+      <AppDialog
+        visible={dialog.visible}
+        title={dialog.title}
+        message={dialog.message}
+        actions={dialog.actions}
+        onClose={hideDialog}
+      />
       <Header variant="coral" title="Notifications" showBack />
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -141,13 +152,13 @@ export default function NotificationsScreen() {
         <View className="px-6 pt-8">
           <Card className="border-border/80 shadow-sm p-6 mb-6">
             <Text className="text-base text-text-secondary mb-4 leading-6">
-              Real events appear here as they happen: patient requests, appointment changes, and shared reports.
+              Real events appear here as they happen: patient requests, appointment changes, shared reports, and account alerts.
             </Text>
-            <TouchableOpacity
-              onPress={() => void markAllRead()}
-              disabled={markingAllRead || items.every((item) => item.read)}
-              activeOpacity={0.85}
-              className="rounded-2xl bg-primary py-4 items-center justify-center min-h-[52px] disabled:opacity-50"
+            <Card
+              onPress={allRead || markingAllRead ? undefined : () => void markAllRead()}
+              className={`rounded-2xl py-4 items-center justify-center min-h-[52px] ${
+                allRead || markingAllRead ? 'bg-primary/40' : 'bg-primary'
+              }`}
             >
               {markingAllRead ? (
                 <ActivityIndicator color={colors.primary.contrast} />
@@ -159,7 +170,7 @@ export default function NotificationsScreen() {
                   Mark all as read
                 </Text>
               )}
-            </TouchableOpacity>
+            </Card>
             {lastError ? (
               <Text className="text-sm text-error mt-4 leading-5">{lastError}</Text>
             ) : null}

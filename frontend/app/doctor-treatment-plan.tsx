@@ -1,10 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Card from '@/components/Card';
 import Header from '@/components/Header';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
+import { useFocusedPolling } from '@/src/shared/hooks/useFocusedPolling';
+import {
+  isTreatmentNotificationType,
+  subscribeNotificationEvents,
+} from '@/src/shared/services/notificationEvents';
 import { formatApiError } from '@/src/shared/utils/formatApiError';
 import { treatmentService, type DoctorTreatmentPlan } from '@/services/treatment';
 import { colors } from '@/constants/colors';
@@ -16,6 +22,7 @@ const TABS: { key: PlanTab; label: string }[] = [
   { key: 'medication', label: 'Medication' },
   { key: 'lifestyle', label: 'Lifestyle' },
 ];
+const TREATMENT_REFRESH_MS = 15_000;
 
 function FieldBlock({ title, body }: { title: string; body: string | null | undefined }) {
   const t = (body ?? '').trim();
@@ -31,6 +38,7 @@ function FieldBlock({ title, body }: { title: string; body: string | null | unde
 }
 
 export default function PatientDoctorTreatmentPlanScreen() {
+  const isFocused = useIsFocused();
   const { role, isLoading: authLoading, user } = useAuth();
   const patientNameSubtitle = user?.display_name?.trim() || undefined;
   const [loading, setLoading] = useState(true);
@@ -62,6 +70,30 @@ export default function PatientDoctorTreatmentPlanScreen() {
     setLoading(true);
     void load();
   }, [authLoading, role, load]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (role === 'patient') {
+        void load();
+      }
+    }, [load, role]),
+  );
+
+  useFocusedPolling(() => load(), TREATMENT_REFRESH_MS, !authLoading && role === 'patient');
+
+  useEffect(() => {
+    if (!isFocused || authLoading || role !== 'patient') {
+      return undefined;
+    }
+
+    return subscribeNotificationEvents((event) => {
+      if (event.kind !== 'received' || !isTreatmentNotificationType(event.type)) {
+        return;
+      }
+
+      void load().catch(() => undefined);
+    });
+  }, [authLoading, isFocused, load, role]);
 
   if (authLoading || loading) {
     return (

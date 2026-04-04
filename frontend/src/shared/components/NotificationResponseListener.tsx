@@ -4,6 +4,8 @@ import { Platform } from 'react-native';
 import { notificationsService } from '@/services/notifications';
 import {
   emitNotificationEvent,
+  emitNotificationStateChanged,
+  NOTIFICATION_ACTION_MARK_READ,
   parseNotificationRuntimeEvent,
   setNotificationCurrentPath,
 } from '@/src/shared/services/notificationEvents';
@@ -29,6 +31,10 @@ export function NotificationResponseListener() {
       if (cancelled) return;
 
       const handleResponse = (response: any) => {
+        const actionIdentifier =
+          typeof response?.actionIdentifier === 'string'
+            ? response.actionIdentifier
+            : null;
         const runtimeEvent = parseNotificationRuntimeEvent({
           kind: 'response',
           data: response?.notification?.request?.content?.data,
@@ -39,8 +45,8 @@ export function NotificationResponseListener() {
         });
         const responseKey =
           runtimeEvent.notificationId ||
-          (typeof response?.actionIdentifier === 'string'
-            ? `${response.actionIdentifier}:${response?.notification?.request?.identifier ?? ''}`
+          (actionIdentifier
+            ? `${actionIdentifier}:${response?.notification?.request?.identifier ?? ''}`
             : null);
 
         if (responseKey && handledResponseKeys.has(responseKey)) {
@@ -53,6 +59,11 @@ export function NotificationResponseListener() {
 
         if (runtimeEvent.notificationId) {
           void notificationsService.markRead(runtimeEvent.notificationId).catch(() => undefined);
+        }
+
+        if (actionIdentifier === NOTIFICATION_ACTION_MARK_READ) {
+          emitNotificationStateChanged();
+          return;
         }
 
         emitNotificationEvent(runtimeEvent);

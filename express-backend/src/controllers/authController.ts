@@ -1,10 +1,9 @@
-import fs from 'fs';
-import path from 'path';
 import type { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { StatusCodes } from 'http-status-codes';
 import mongoose from 'mongoose';
 import { z } from 'zod';
+import { BlobModel } from '../models/Blob';
 import { Doctor } from '../models/Doctor';
 import { Patient } from '../models/Patient';
 import { User } from '../models/User';
@@ -67,7 +66,6 @@ const avatarMimeTypes: Record<string, string> = {
   'image/webp': 'webp',
 };
 
-const AVATAR_DIR = path.join(process.cwd(), 'uploaded-avatars');
 const MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024;
 
 function toAuthUser(doc: {
@@ -86,17 +84,16 @@ function toAuthUser(doc: {
   };
 }
 
-function extractAvatarFileName(avatarUrl?: string | null): string | null {
+function extractAvatarBlobId(avatarUrl?: string | null): string | null {
   if (!avatarUrl) return null;
   const match = avatarUrl.match(/\/auth\/avatars\/([^/?#]+)/i);
   return match?.[1] ?? null;
 }
 
 async function removeStoredAvatar(avatarUrl?: string | null) {
-  const fileName = extractAvatarFileName(avatarUrl);
-  if (!fileName) return;
-  const target = path.join(AVATAR_DIR, path.basename(fileName));
-  await fs.promises.unlink(target).catch(() => undefined);
+  const blobId = extractAvatarBlobId(avatarUrl);
+  if (!blobId || !mongoose.isValidObjectId(blobId)) return;
+  await BlobModel.deleteOne({ _id: new mongoose.Types.ObjectId(blobId) }).catch(() => undefined);
 }
 
 function buildProfileCode(prefix: 'DR' | 'PT', id: string): string {
@@ -435,14 +432,19 @@ export async function uploadMeAvatar(req: Request, res: Response): Promise<void>
     return;
   }
 
-  await fs.promises.mkdir(AVATAR_DIR, { recursive: true });
   await removeStoredAvatar(user.avatar_url);
 
-  const fileName = `${user.id}-${Date.now()}.${extension}`;
-  const filePath = path.join(AVATAR_DIR, fileName);
-  await fs.promises.writeFile(filePath, buffer);
+  const blob = await BlobModel.create({
+    storage_backend: 'mongo',
+    storage_key: `mongo-avatar:${user.id}:${Date.now()}`,
+    filename: `${user.id}-${Date.now()}.${extension}`,
+    content_type: parse.data.mime_type,
+    size_bytes: buffer.length,
+    data_buffer: buffer,
+    uploaded_by: user._id,
+  });
 
-  user.avatar_url = `/auth/avatars/${fileName}`;
+  user.avatar_url = `/auth/avatars/${blob.id}`;
   await user.save();
 
   res.json(
@@ -457,18 +459,20 @@ export async function uploadMeAvatar(req: Request, res: Response): Promise<void>
 }
 
 export async function getAvatar(req: Request, res: Response): Promise<void> {
-  const fileName = path.basename(req.params.filename ?? '');
-  if (!fileName) {
+  const blobId = (req.params.filename ?? '').trim();
+  if (!blobId || !mongoose.isValidObjectId(blobId)) {
     res.status(StatusCodes.NOT_FOUND).json({ message: 'Avatar not found' });
     return;
   }
 
-  const filePath = path.join(AVATAR_DIR, fileName);
-  if (!fs.existsSync(filePath)) {
+  const blob = await BlobModel.findById(blobId);
+  if (!blob?.data_buffer) {
     res.status(StatusCodes.NOT_FOUND).json({ message: 'Avatar not found' });
     return;
   }
 
   res.setHeader('Cache-Control', 'public, max-age=3600');
-  res.sendFile(filePath);
+  res.type(blob.content_type || 'application/octet-stream');
+  res.setHeader('Content-Length', String(blob.size_bytes));
+  res.send(blob.data_buffer);
 }

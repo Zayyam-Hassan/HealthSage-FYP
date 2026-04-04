@@ -15,6 +15,10 @@ import {
 import { Prescription } from '../models/Prescription';
 import { LifestylePlan } from '../models/LifestylePlan';
 import { callRiskExplain, callRiskPrediction } from '../integrations/fastapi/client';
+import {
+  createNotificationForDoctorProfile,
+  createNotificationForPatientProfile,
+} from './notificationsService';
 import { writeReportPdf } from '../utils/reportPdf';
 
 const SUPPORTED_UPLOAD_TYPES: Record<string, string> = {
@@ -436,6 +440,21 @@ export async function uploadReportForPatient(
   });
 
   console.info(`[reports] uploaded report created by patient report=${report.id}`);
+
+  await createNotificationForDoctorProfile(patient.primary_doctor_id, {
+    type: 'report_uploaded_by_patient',
+    title: 'New patient report uploaded',
+    message: `${patient.full_name} uploaded "${report.title}".`,
+    href: `/reports?patientId=${patient.id}`,
+    data: {
+      report_id: report.id,
+      patient_id: patient.id,
+      doctor_id: patient.primary_doctor_id?.toString() ?? null,
+      uploaded_by_role: 'patient',
+      category: report.category,
+    },
+  }).catch(() => null);
+
   return mapUploadedReport(report);
 }
 
@@ -469,6 +488,21 @@ export async function uploadReportForDoctor(
   });
 
   console.info(`[reports] uploaded report created by doctor report=${report.id} patient=${patient.id}`);
+
+  await createNotificationForPatientProfile(patient._id, {
+    type: 'report_uploaded_by_doctor',
+    title: 'New report shared',
+    message: `${doctor.name} uploaded "${report.title}" to your records.`,
+    href: '/reports',
+    data: {
+      report_id: report.id,
+      patient_id: patient.id,
+      doctor_id: doctor.id,
+      uploaded_by_role: 'doctor',
+      category: report.category,
+    },
+  }).catch(() => null);
+
   return mapUploadedReport(report);
 }
 
@@ -829,6 +863,7 @@ export async function getDoctorPatientReportsOverview(userId: string, patientId:
 
 export async function shareGeneratedReportToPatient(userId: string, reportId: string) {
   const report = await getAccessibleGeneratedReport('doctor', userId, reportId);
+  const doctor = await requireDoctorForUser(userId);
   report.is_sent_to_patient = true;
   if (!report.sent_to_patient_at) {
     report.sent_to_patient_at = new Date();
@@ -836,5 +871,20 @@ export async function shareGeneratedReportToPatient(userId: string, reportId: st
   report.last_sent_at = new Date();
   report.send_count = (report.send_count ?? 0) + 1;
   await report.save();
+
+  await createNotificationForPatientProfile(report.patient_id, {
+    type: 'generated_report_shared',
+    title: 'New generated report shared',
+    message: `${doctor.name} shared "${report.title}" with you.`,
+    href: '/reports',
+    data: {
+      report_id: report.id,
+      patient_id: report.patient_id.toString(),
+      doctor_id: report.doctor_id?.toString() ?? doctor.id,
+      report_type: report.type,
+      send_count: report.send_count ?? 1,
+    },
+  }).catch(() => null);
+
   return mapGeneratedReport(report);
 }

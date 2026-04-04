@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "633328771492",
+    "project_id": "healthsage-1e21f",
+    "storage_bucket": "healthsage-1e21f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:633328771492:android:c7a5aed2fdbf94599ae131",
+        "android_client_info": {
+          "package_name": "com.zayyam.healthsage"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAEa1suyedw6dTe9YgvMZHFp3dBytSw--Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
