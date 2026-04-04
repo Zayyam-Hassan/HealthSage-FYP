@@ -114,11 +114,18 @@ async function sendPushToUserDevices(
       id: notification.id,
       type: notification.type,
       href: notification.href ?? undefined,
+      ...((notification.data as Record<string, unknown> | null) ?? {}),
     },
   }));
 
   try {
-    await axios.post(EXPO_PUSH_URL, messages, {
+    const response = await axios.post<{
+      data?: Array<{
+        status?: string;
+        message?: string;
+        details?: { error?: string };
+      }>;
+    }>(EXPO_PUSH_URL, messages, {
       headers: {
         Accept: 'application/json',
         'Accept-Encoding': 'gzip, deflate',
@@ -126,6 +133,32 @@ async function sendPushToUserDevices(
       },
       timeout: 10000,
     });
+
+    const tickets = Array.isArray(response.data?.data) ? response.data.data : [];
+    const staleTokens: string[] = [];
+
+    tickets.forEach((ticket, index) => {
+      if (ticket?.status !== 'error') {
+        return;
+      }
+
+      const token = devices[index]?.expo_push_token;
+      console.error('[notifications] Expo push ticket failed', {
+        token,
+        message: ticket.message,
+        error: ticket.details?.error,
+      });
+
+      if (ticket.details?.error === 'DeviceNotRegistered' && token) {
+        staleTokens.push(token);
+      }
+    });
+
+    if (staleTokens.length > 0) {
+      await NotificationDevice.deleteMany({
+        expo_push_token: { $in: staleTokens },
+      }).catch(() => undefined);
+    }
   } catch (error) {
     console.error('[notifications] Expo push dispatch failed', error);
   }

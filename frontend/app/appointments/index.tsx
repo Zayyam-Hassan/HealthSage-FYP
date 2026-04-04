@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
@@ -34,6 +34,10 @@ import { formatApiError } from '@/src/shared/utils/formatApiError';
 import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { useFocusedPolling } from '@/src/shared/hooks/useFocusedPolling';
+import {
+  isAppointmentNotificationType,
+  subscribeNotificationEvents,
+} from '@/src/shared/services/notificationEvents';
 import { filterUpcomingBookedAppointments } from '@/utils/appointmentFilters';
 import AppointmentMonthCalendar from './AppointmentMonthCalendar';
 
@@ -156,6 +160,7 @@ function emptyAvailabilityForm(weekday: SchedulingWeekday = 'monday') {
 export default function AppointmentsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ doctor_id?: string }>();
+  const isFocused = useIsFocused();
   const { role, refreshUser, isLoading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -237,6 +242,17 @@ export default function AppointmentsScreen() {
     setPatientAppointments(appointmentsRes.items);
   }, []);
 
+  const refreshVisibleAppointments = useCallback(async () => {
+    if (role === 'doctor') {
+      await loadDoctorData();
+      return;
+    }
+
+    if (role === 'patient') {
+      await loadPatientData();
+    }
+  }, [loadDoctorData, loadPatientData, role]);
+
   const loadData = useCallback(async () => {
     try {
       setError(null);
@@ -272,6 +288,20 @@ export default function AppointmentsScreen() {
   );
 
   useFocusedPolling(() => loadData(), APPOINTMENTS_REFRESH_MS, !authLoading);
+
+  useEffect(() => {
+    if (!isFocused || authLoading) {
+      return undefined;
+    }
+
+    return subscribeNotificationEvents((event) => {
+      if (event.kind !== 'received' || !isAppointmentNotificationType(event.type)) {
+        return;
+      }
+
+      void refreshVisibleAppointments().catch(() => undefined);
+    });
+  }, [authLoading, isFocused, refreshVisibleAppointments]);
 
   useEffect(() => {
     if (role === 'patient' && params.doctor_id) {

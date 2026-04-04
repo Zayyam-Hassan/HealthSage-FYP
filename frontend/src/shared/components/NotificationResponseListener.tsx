@@ -1,9 +1,22 @@
 import { useEffect } from 'react';
+import { usePathname } from 'expo-router';
 import { Platform } from 'react-native';
 import { notificationsService } from '@/services/notifications';
-import { emitNotificationStateChanged } from '@/src/shared/services/notificationEvents';
+import {
+  emitNotificationEvent,
+  parseNotificationRuntimeEvent,
+  setNotificationCurrentPath,
+} from '@/src/shared/services/notificationEvents';
+
+const handledResponseKeys = new Set<string>();
 
 export function NotificationResponseListener() {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    setNotificationCurrentPath(pathname);
+  }, [pathname]);
+
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
@@ -16,23 +29,33 @@ export function NotificationResponseListener() {
       if (cancelled) return;
 
       const handleResponse = (response: any) => {
-        const data = response?.notification?.request?.content?.data as
-          | { id?: unknown; href?: unknown }
-          | undefined;
-
-        // For backend pushes, we set `data: { id, type, href }`.
-        const cachedId =
-          (typeof data?.id === 'string' && data.id) ||
-          (typeof response?.notification?.request?.identifier === 'string'
-            ? response.notification.request.identifier
+        const runtimeEvent = parseNotificationRuntimeEvent({
+          kind: 'response',
+          data: response?.notification?.request?.content?.data,
+          fallbackId:
+            typeof response?.notification?.request?.identifier === 'string'
+              ? response.notification.request.identifier
+              : null,
+        });
+        const responseKey =
+          runtimeEvent.notificationId ||
+          (typeof response?.actionIdentifier === 'string'
+            ? `${response.actionIdentifier}:${response?.notification?.request?.identifier ?? ''}`
             : null);
 
-        if (typeof cachedId === 'string' && cachedId.length > 0) {
-          void notificationsService.markRead(cachedId).catch(() => undefined);
+        if (responseKey && handledResponseKeys.has(responseKey)) {
+          return;
         }
 
-        emitNotificationStateChanged();
+        if (responseKey) {
+          handledResponseKeys.add(responseKey);
+        }
 
+        if (runtimeEvent.notificationId) {
+          void notificationsService.markRead(runtimeEvent.notificationId).catch(() => undefined);
+        }
+
+        emitNotificationEvent(runtimeEvent);
       };
 
       try {
@@ -43,8 +66,17 @@ export function NotificationResponseListener() {
       }
 
       responseSubscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
-      receiveSubscription = Notifications.addNotificationReceivedListener(() => {
-        emitNotificationStateChanged();
+      receiveSubscription = Notifications.addNotificationReceivedListener((notification) => {
+        emitNotificationEvent(
+          parseNotificationRuntimeEvent({
+            kind: 'received',
+            data: notification.request.content.data,
+            fallbackId:
+              typeof notification.request.identifier === 'string'
+                ? notification.request.identifier
+                : null,
+          }),
+        );
       });
     })();
 

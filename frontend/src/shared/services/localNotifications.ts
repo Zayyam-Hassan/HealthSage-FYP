@@ -1,5 +1,9 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import {
+  parseNotificationRuntimeEvent,
+  shouldSuppressForegroundNotification,
+} from '@/src/shared/services/notificationEvents';
 
 type ExpoModule = typeof import('expo-notifications');
 
@@ -22,19 +26,31 @@ export async function initializeLocalNotifications(): Promise<void> {
   const Notifications = await loadExpoNotifications();
   if (!Notifications) return;
 
-  await Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
+  Notifications.setNotificationHandler({
+    handleNotification: async (notification) => {
+      const runtimeEvent = parseNotificationRuntimeEvent({
+        kind: 'received',
+        data: notification.request.content.data,
+        fallbackId:
+          typeof notification.request.identifier === 'string'
+            ? notification.request.identifier
+            : null,
+      });
+      const shouldSuppress = shouldSuppressForegroundNotification(runtimeEvent);
+
+      return {
+        shouldShowBanner: !shouldSuppress,
+        shouldShowList: !shouldSuppress,
+        shouldPlaySound: !shouldSuppress,
+        shouldSetBadge: false,
+      };
+    },
   });
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
       name: 'HealthSage',
-      importance: Notifications.AndroidImportance.HIGH,
+      importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#E66A6A',
       sound: 'default',
