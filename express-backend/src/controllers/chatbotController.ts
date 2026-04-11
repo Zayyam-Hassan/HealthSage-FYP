@@ -44,6 +44,46 @@ function shouldGenerateReport(query: string) {
   ].some((pattern) => pattern.test(normalized));
 }
 
+function isMedicationOnlyQuery(query: string) {
+  const normalized = query.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!normalized) return false;
+
+  const medicationSignals = [
+    /\bmedication\b/,
+    /\bmedications\b/,
+    /\bmedicine\b/,
+    /\bmedicines\b/,
+    /\bdrug\b/,
+    /\bdrugs\b/,
+    /\bprescrib(?:e|ing|ed)?\b/,
+    /\bpharmac(?:ologic|ological|otherapy)\b/,
+    /\btreatment options?\b/,
+  ];
+  const otherIntentSignals = [
+    /\blifestyle\b/,
+    /\bdiet\b/,
+    /\bexercise\b/,
+    /\bactivity\b/,
+    /\brisk\b/,
+    /\bscore\b/,
+    /\bprobability\b/,
+    /\bexplain\b/,
+    /\bwhy\b/,
+    /\bcompare\b/,
+    /\bversus\b/,
+    /\bvs\b/,
+    /\bwhat if\b/,
+    /\breport\b/,
+    /\bsummary\b/,
+    /\bdoctor treatment\b/,
+    /\btreatment plan\b/,
+    /\bdoctor plan\b/,
+  ];
+
+  return medicationSignals.some((pattern) => pattern.test(normalized))
+    && !otherIntentSignals.some((pattern) => pattern.test(normalized));
+}
+
 function toSentenceList(value: unknown): string[] {
   if (!value) return [];
   if (Array.isArray(value)) {
@@ -178,6 +218,103 @@ function buildMedicationRecommendations(
   if (recommendations.length > 0) return recommendations.slice(0, 8);
 
   return ['No medication recommendation could be confidently summarized from the current data.'];
+}
+
+function formatMedicationChatResponse(
+  medication: Record<string, any> | undefined,
+  patient: any,
+) {
+  const data = medication ?? {};
+  const primary = (data.primary_option ?? null) as Record<string, any> | null;
+  const alternatives = Array.isArray(data.alternatives) ? data.alternatives : [];
+  const recommended = Array.isArray(data.recommended_medications) ? data.recommended_medications : [];
+  const warnings = uniqueLines(toSentenceList(data.warnings)).slice(0, 6);
+  const missingInformation = uniqueLines(toSentenceList(data.missing_information)).slice(0, 6);
+  const grounded = ((data.grounded_response ?? {}) as Record<string, any>);
+  const groundedRecommendations = Array.isArray(grounded.recommendations)
+    ? grounded.recommendations
+    : [];
+  const leadingGrounded = groundedRecommendations[0] as Record<string, any> | undefined;
+  const evidenceStrength = typeof (data.evidence_strength ?? grounded.evidence_strength) === 'string'
+    ? String(data.evidence_strength ?? grounded.evidence_strength)
+    : '';
+  const patientSnapshot = buildClinicalSnapshot(patient).slice(0, 5);
+  const sections: string[] = [];
+
+  if (patientSnapshot.length > 0) {
+    sections.push(`Patient context:\n- ${patientSnapshot.join('\n- ')}`);
+  }
+
+  const contextSummary = stripMarkdown(
+    String(data.context_summary ?? data.clinical_reasoning ?? '').trim(),
+  );
+  if (contextSummary) {
+    sections.push(`Clinical reasoning:\n- ${contextSummary}`);
+  }
+
+  if (!primary && recommended.length === 0) {
+    const noRecommendationLines = uniqueLines([
+      'No medication option was confidently recommended from the current patient profile.',
+      ...(missingInformation.length > 0
+        ? missingInformation.map((item) => `Missing information: ${item}`)
+        : []),
+      warnings[0] ? `Key caution: ${warnings[0]}` : '',
+      stripMarkdown(String(data.doctor_note ?? 'Medication decisions must always be confirmed by the clinician.')),
+    ]);
+    sections.push(`Medication guidance:\n- ${noRecommendationLines.join('\n- ')}`);
+    return sections.filter(Boolean).join('\n\n');
+  }
+
+  const primaryName = String(
+    primary?.drug_name
+      ?? primary?.name
+      ?? recommended[0]?.name
+      ?? 'Primary option under review',
+  ).trim();
+  const primaryWhy = uniqueLines([
+    ...toSentenceList(primary?.why),
+    ...toSentenceList(leadingGrounded?.why_it_matches_patient),
+    ...toSentenceList(leadingGrounded?.why_it_matches),
+  ]).slice(0, 5);
+
+  sections.push(
+    `Medication guidance:\n- Primary option: ${primaryName}${evidenceStrength ? ` (${evidenceStrength} evidence)` : ''}`,
+  );
+
+  if (primaryWhy.length > 0) {
+    sections.push(`Why it fits this patient:\n- ${primaryWhy.join('\n- ')}`);
+  }
+
+  const alternativesLines = uniqueLines(
+    alternatives
+      .slice(0, 3)
+      .map((option: any) => {
+        const name = String(option?.drug_name ?? option?.name ?? '').trim();
+        const why = uniqueLines(toSentenceList(option?.why)).join('; ');
+        if (!name) return '';
+        return why ? `${name}: ${why}` : name;
+      }),
+  );
+  if (alternativesLines.length > 0) {
+    sections.push(`Alternatives considered:\n- ${alternativesLines.join('\n- ')}`);
+  }
+
+  if (warnings.length > 0) {
+    sections.push(`Warnings:\n- ${warnings.join('\n- ')}`);
+  }
+
+  if (missingInformation.length > 0) {
+    sections.push(`Missing information:\n- ${missingInformation.join('\n- ')}`);
+  }
+
+  const doctorNote = stripMarkdown(
+    String(data.doctor_note ?? grounded.disclaimer ?? 'Medication decisions must always be confirmed by the clinician.'),
+  );
+  if (doctorNote) {
+    sections.push(`Clinician review:\n- ${doctorNote}`);
+  }
+
+  return sections.filter(Boolean).join('\n\n');
 }
 
 function buildMonitoringPlan(patient: any, latestRisk: any) {
@@ -580,6 +717,7 @@ export async function chatWithHistory(req: Request, res: Response): Promise<void
   const mode = body.mode ?? 'master';
   const subject = body.subject ?? 'Clinical chat';
   const reportRequested = shouldGenerateReport(body.doctor_query);
+  const medicationOnlyRequest = isMedicationOnlyQuery(body.doctor_query);
 
   try {
     if (req.user?.role !== 'doctor') {
@@ -653,21 +791,33 @@ export async function chatWithHistory(req: Request, res: Response): Promise<void
     let agentOutputs: Record<string, unknown> | undefined;
     let responseMode = mode;
     let failed = false;
-    let diagnosisProvidedNow = false;
-    try {
-      const identification = await callDiagnosisIdentifier(body.doctor_query);
-      diagnosisProvidedNow = Boolean(identification?.is_diagnosis_or_assessment);
-    } catch (err) {
-      // If classifier is unavailable, do not block the doctor's workflow.
-      diagnosisProvidedNow = true;
+    let diagnosisProvidedNow = true;
+    const firstDoctorTurn = priorDoctorMessageCount === 0;
+    if (firstDoctorTurn) {
+      try {
+        const identification = await callDiagnosisIdentifier(body.doctor_query);
+        diagnosisProvidedNow = Boolean(identification?.is_diagnosis_or_assessment);
+      } catch (err) {
+        // If classifier is unavailable, do not block the doctor's workflow.
+        diagnosisProvidedNow = true;
+      }
     }
-    // Enforce diagnosis-first only for the first doctor turn in a conversation.
-    const requiresDiagnosisFirst = priorDoctorMessageCount === 0 && !diagnosisProvidedNow;
+    const requiresDiagnosisFirst = firstDoctorTurn && !diagnosisProvidedNow;
 
     try {
       if (requiresDiagnosisFirst) {
         finalMessage =
           'Before I provide recommendations, please share your clinical diagnosis or current assessment for this patient first. I will then align suggestions to your judgment.';
+      } else if (medicationOnlyRequest) {
+        const medicationResponse = await callRecommendMedicationForPatient(patientId);
+        agentOutputs = {
+          medication: {
+            agent: 'medication',
+            data: medicationResponse,
+          },
+        };
+        responseMode = 'medication';
+        finalMessage = formatMedicationChatResponse(medicationResponse, patient);
       } else {
         const fastApiResponse = await callChatbot(
           '/chatbot/clinical-assistant',
