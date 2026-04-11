@@ -1,28 +1,41 @@
 import axios, { type AxiosInstance } from 'axios';
 import { env } from '../../config/env';
 
+const STANDARD_FASTAPI_TIMEOUT_MS = 15_000;
+export const LONG_RUNNING_FASTAPI_TIMEOUT_MS = 180_000;
+
 const fastApiClient: AxiosInstance = axios.create({
   baseURL: env.fastApiBaseUrl,
-  timeout: 15000,
+  timeout: STANDARD_FASTAPI_TIMEOUT_MS,
 });
 
 const recommendationClient: AxiosInstance = axios.create({
   baseURL: env.fastApiBaseUrl,
-  timeout: 60000,
+  timeout: LONG_RUNNING_FASTAPI_TIMEOUT_MS,
 });
 
 const chatbotClient: AxiosInstance = axios.create({
   baseURL: env.fastApiBaseUrl,
-  timeout: 120000,
+  timeout: LONG_RUNNING_FASTAPI_TIMEOUT_MS,
 });
 
-export async function callRiskExplain(patientId: string) {
-  const res = await fastApiClient.get(`/risk/${encodeURIComponent(patientId)}/explain`);
+export async function callRiskExplain(
+  patientId: string,
+  timeoutMs = STANDARD_FASTAPI_TIMEOUT_MS,
+) {
+  const res = await fastApiClient.get(`/risk/${encodeURIComponent(patientId)}/explain`, {
+    timeout: timeoutMs,
+  });
   return res.data;
 }
 
-export async function callRiskPrediction(patientId: string) {
-  const res = await fastApiClient.get(`/risk/${encodeURIComponent(patientId)}`);
+export async function callRiskPrediction(
+  patientId: string,
+  timeoutMs = STANDARD_FASTAPI_TIMEOUT_MS,
+) {
+  const res = await fastApiClient.get(`/risk/${encodeURIComponent(patientId)}`, {
+    timeout: timeoutMs,
+  });
   return res.data;
 }
 
@@ -64,6 +77,7 @@ export async function callRecommendMedication(payload: Record<string, any>) {
   const res = await recommendationClient.post(
     `/recommendations/medication/${encodeURIComponent(patientId)}`,
     body,
+    { timeout: LONG_RUNNING_FASTAPI_TIMEOUT_MS },
   );
   return res.data;
 }
@@ -75,6 +89,7 @@ export async function callRecommendMedicationForPatient(
   const res = await recommendationClient.post(
     `/recommendations/medication/${encodeURIComponent(patientId)}`,
     payload ?? {},
+    { timeout: LONG_RUNNING_FASTAPI_TIMEOUT_MS },
   );
   return res.data;
 }
@@ -93,24 +108,33 @@ export async function callRecommendLifestyle(payload: Record<string, any>) {
   const res = await recommendationClient.post(
     `/recommendations/lifestyle/${encodeURIComponent(patientId)}`,
     undefined,
-    { params },
+    {
+      params,
+      timeout: LONG_RUNNING_FASTAPI_TIMEOUT_MS,
+    },
   );
   return res.data;
 }
 
 export async function callChatbot(path: string, payload: Record<string, any>) {
-  const res = await chatbotClient.post(path, payload);
+  const res = await chatbotClient.post(path, payload, {
+    timeout: LONG_RUNNING_FASTAPI_TIMEOUT_MS,
+  });
   return res.data;
 }
 
 export async function callChatbotGet(path: string) {
-  const res = await chatbotClient.get(path);
+  const res = await chatbotClient.get(path, {
+    timeout: LONG_RUNNING_FASTAPI_TIMEOUT_MS,
+  });
   return res.data;
 }
 
 export async function callDiagnosisIdentifier(doctorQuery: string) {
   const res = await chatbotClient.post('/chatbot/identify-diagnosis', {
     doctor_query: doctorQuery,
+  }, {
+    timeout: LONG_RUNNING_FASTAPI_TIMEOUT_MS,
   });
   return res.data as {
     is_diagnosis_or_assessment?: boolean;

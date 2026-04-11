@@ -1,7 +1,7 @@
 /**
  * Chatbot API service — wired to backend POST /chatbot/chat (persists conversation + messages).
  */
-import { apiClient } from './api';
+import { apiClient, LONG_RUNNING_REQUEST_TIMEOUT_MS } from './api';
 
 export interface ChatWithHistoryRequest {
   patient_id: string;
@@ -79,25 +79,34 @@ class ChatbotService {
     if (payload.what_if_changes) {
       body.what_if_changes = payload.what_if_changes;
     }
-    return await apiClient.post<ChatWithHistoryResponse>('/chatbot/chat', body);
+    return await apiClient.post<ChatWithHistoryResponse>(
+      '/chatbot/chat',
+      body,
+      { timeoutMs: LONG_RUNNING_REQUEST_TIMEOUT_MS },
+    );
   }
 
   /**
    * Get patient context (risk, summary, recommendations) when opening chat for a patient.
    */
   async getPatientContext(patientId: string): Promise<Record<string, unknown>> {
-    return await apiClient.get<Record<string, unknown>>(`/chatbot/patient-context/${patientId}`);
+    return await apiClient.get<Record<string, unknown>>(
+      `/chatbot/patient-context/${patientId}`,
+      { timeoutMs: LONG_RUNNING_REQUEST_TIMEOUT_MS },
+    );
   }
 
   async getLatestConversation(patientId: string): Promise<ConversationTranscriptResponse> {
     return await apiClient.get<ConversationTranscriptResponse>(
       `/chatbot/patients/${patientId}/conversation`,
+      { timeoutMs: LONG_RUNNING_REQUEST_TIMEOUT_MS },
     );
   }
 
   async listPatientConversations(patientId: string): Promise<PatientConversationListResponse> {
     return await apiClient.get<PatientConversationListResponse>(
       `/chatbot/patients/${patientId}/conversations`,
+      { timeoutMs: LONG_RUNNING_REQUEST_TIMEOUT_MS },
     );
   }
 
@@ -108,6 +117,7 @@ class ChatbotService {
     const query = patientId ? `?patient_id=${encodeURIComponent(patientId)}` : '';
     return await apiClient.get<ConversationTranscriptResponse>(
       `/chatbot/conversations/${conversationId}/transcript${query}`,
+      { timeoutMs: LONG_RUNNING_REQUEST_TIMEOUT_MS },
     );
   }
 }

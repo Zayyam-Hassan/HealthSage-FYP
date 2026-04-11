@@ -1,4 +1,4 @@
-import { apiClient } from './api';
+import { apiClient, LONG_RUNNING_REQUEST_TIMEOUT_MS } from './api';
 
 export type UploadedReportCategory = 'patient_sent' | 'doctor_sent' | 'system_generated';
 
@@ -90,6 +90,7 @@ class ReportsService {
     return apiClient.post<GeneratedReport>(
       `${BASE}/generated/patients/${patientId}/risk-summary`,
       {},
+      { timeoutMs: LONG_RUNNING_REQUEST_TIMEOUT_MS },
     );
   }
 
@@ -97,6 +98,7 @@ class ReportsService {
     return apiClient.post<GeneratedReport>(
       `${BASE}/generated/patients/${patientId}/treatment-summary`,
       {},
+      { timeoutMs: LONG_RUNNING_REQUEST_TIMEOUT_MS },
     );
   }
 
@@ -104,6 +106,7 @@ class ReportsService {
     return apiClient.post<GeneratedReport>(
       `${BASE}/generated/patients/${patientId}/overview`,
       {},
+      { timeoutMs: LONG_RUNNING_REQUEST_TIMEOUT_MS },
     );
   }
 

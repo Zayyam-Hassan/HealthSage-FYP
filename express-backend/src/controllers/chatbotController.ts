@@ -14,6 +14,7 @@ import {
   callRecommendLifestyle,
   callRecommendMedicationForPatient,
   callRiskExplain,
+  LONG_RUNNING_FASTAPI_TIMEOUT_MS,
 } from '../integrations/fastapi/client';
 import { buildReportPdfBuffer } from '../utils/reportPdf';
 import { storePdfAttachment } from '../utils/reportAttachmentStorage';
@@ -450,7 +451,10 @@ async function createPatientCareSummary(
 
   if (!(enrichedAgentOutputs.risk || enrichedAgentOutputs.get_risk || enrichedAgentOutputs.get_risk_explain) && !latestRisk) {
     try {
-      enrichedAgentOutputs.risk = await callRiskExplain(patientId);
+      enrichedAgentOutputs.risk = await callRiskExplain(
+        patientId,
+        LONG_RUNNING_FASTAPI_TIMEOUT_MS,
+      );
     } catch (err) {
       // keep report generation resilient; patient data can still drive the report
     }

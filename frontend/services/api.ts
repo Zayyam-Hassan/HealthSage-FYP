@@ -7,6 +7,11 @@ import {
 
 /** Abort hanging requests so the UI does not spin forever (Vercel cold start is still bounded). */
 const REQUEST_TIMEOUT_MS = 45_000;
+export const LONG_RUNNING_REQUEST_TIMEOUT_MS = 180_000;
+
+interface RequestOptions {
+  timeoutMs?: number;
+}
 
 export interface ApiError {
   message: string;
@@ -49,6 +54,7 @@ class ApiClient {
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
+    requestOptions: RequestOptions = {},
     hasRetriedAfterRefresh = false,
   ): Promise<T> {
     await initializeApiConfig();
@@ -67,7 +73,8 @@ class ApiClient {
     const url = `${this.getBaseURL()}${endpoint}`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeoutMs = requestOptions.timeoutMs ?? REQUEST_TIMEOUT_MS;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       if (__DEV__) {
@@ -116,7 +123,7 @@ class ApiClient {
 
       if (error instanceof Error && error.name === 'AbortError') {
         throw {
-          message: `Request timed out (${REQUEST_TIMEOUT_MS / 1000}s). Check network, VPN, and that the API is up.`,
+          message: `Request timed out (${timeoutMs / 1000}s). Check network, VPN, and that the API is up.`,
           status: 0,
         } as ApiError;
       }
@@ -128,7 +135,7 @@ class ApiClient {
         usesLanBackendDiscovery()
       ) {
         await refreshApiConfig();
-        return this.request<T>(endpoint, options, true);
+        return this.request<T>(endpoint, options, requestOptions, true);
       }
       if (error instanceof Error) {
         throw {
@@ -140,36 +147,36 @@ class ApiClient {
     }
   }
 
-  async get<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'GET' });
+  async get<T>(endpoint: string, requestOptions?: RequestOptions): Promise<T> {
+    return this.request<T>(endpoint, { method: 'GET' }, requestOptions);
   }
 
-  async post<T>(endpoint: string, data?: any): Promise<T> {
+  async post<T>(endpoint: string, data?: any, requestOptions?: RequestOptions): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
-    });
+    }, requestOptions);
   }
 
-  async put<T>(endpoint: string, data?: any): Promise<T> {
+  async put<T>(endpoint: string, data?: any, requestOptions?: RequestOptions): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
-    });
+    }, requestOptions);
   }
 
-  async patch<T>(endpoint: string, data?: any): Promise<T> {
+  async patch<T>(endpoint: string, data?: any, requestOptions?: RequestOptions): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'PATCH',
       body: data ? JSON.stringify(data) : undefined,
-    });
+    }, requestOptions);
   }
 
-  async delete<T>(endpoint: string, data?: any): Promise<T> {
+  async delete<T>(endpoint: string, data?: any, requestOptions?: RequestOptions): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'DELETE',
       body: data ? JSON.stringify(data) : undefined,
-    });
+    }, requestOptions);
   }
 }
 

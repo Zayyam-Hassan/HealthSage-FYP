@@ -25,13 +25,65 @@ import {
 } from '@/services/reports';
 
 type SectionGroup = 'all' | 'profile' | 'recommendations' | 'monitoring';
+type GeneratedSection = {
+  key: string;
+  title: string;
+  text: string;
+  group: Exclude<SectionGroup, 'all'>;
+};
+type SectionTabMeta = { id: SectionGroup; label: string; a11yLabel: string };
 
-const SECTION_TABS: { id: SectionGroup; label: string; a11yLabel: string }[] = [
-  { id: 'all', label: 'All', a11yLabel: 'All sections' },
-  { id: 'profile', label: 'Profile', a11yLabel: 'Patient and doctor profile' },
-  { id: 'recommendations', label: 'Guidance', a11yLabel: 'Lifestyle and medication guidance' },
-  { id: 'monitoring', label: 'Care plan', a11yLabel: 'Monitoring and next steps' },
-];
+const DEFAULT_SECTION_TABS: Record<Exclude<SectionGroup, 'all'>, SectionTabMeta> = {
+  profile: {
+    id: 'profile',
+    label: 'Profile',
+    a11yLabel: 'Patient and doctor profile',
+  },
+  recommendations: {
+    id: 'recommendations',
+    label: 'Guidance',
+    a11yLabel: 'Lifestyle and medication guidance',
+  },
+  monitoring: {
+    id: 'monitoring',
+    label: 'Care plan',
+    a11yLabel: 'Monitoring and next steps',
+  },
+};
+
+const SECTION_TAB_OVERRIDES: Partial<
+  Record<
+    string,
+    Partial<Record<Exclude<SectionGroup, 'all'>, Pick<SectionTabMeta, 'label' | 'a11yLabel'>>>
+  >
+> = {
+  risk_prediction: {
+    monitoring: {
+      label: 'Risk',
+      a11yLabel: 'Risk insights and follow-up',
+    },
+  },
+  treatment_summary: {
+    recommendations: {
+      label: 'Treatment',
+      a11yLabel: 'Medication and lifestyle treatment details',
+    },
+    monitoring: {
+      label: 'Follow-up',
+      a11yLabel: 'Monitoring and follow-up details',
+    },
+  },
+  patient_overview: {
+    recommendations: {
+      label: 'Care',
+      a11yLabel: 'Care summary details',
+    },
+    monitoring: {
+      label: 'Insights',
+      a11yLabel: 'Clinical insights and next steps',
+    },
+  },
+};
 
 function viewerParamsForUploaded(report: UploadedReport) {
   return {
@@ -90,6 +142,193 @@ function iconForGroup(group: SectionGroup): keyof typeof Ionicons.glyphMap {
     default:
       return 'layers-outline';
   }
+}
+
+function orderedGeneratedKeysForReportType(reportType?: string | null) {
+  switch (reportType) {
+    case 'risk_prediction':
+      return [
+        'patient_snapshot',
+        'risk_label',
+        'risk_score',
+        'explanation',
+        'top_features',
+        'doctor_considerations',
+      ];
+    case 'treatment_summary':
+      return [
+        'patient_snapshot',
+        'medications',
+        'lifestyle_plan',
+        'latest_prescription',
+        'latest_lifestyle_plan',
+        'doctor_considerations',
+      ];
+    case 'patient_overview':
+      return [
+        'patient_snapshot',
+        'report_counts',
+        'latest_prescription',
+        'latest_lifestyle_plan',
+        'doctor_considerations',
+      ];
+    case 'ai_summary':
+      return [
+        'patient_friendly_title',
+        'overview',
+        'patient_details',
+        'doctor_details',
+        'patient_metrics_context',
+        'clinical_snapshot',
+        'protective_factors',
+        'active_concerns',
+        'latest_risk_summary',
+        'risk_narrative',
+        'risk_drivers',
+        'lifestyle_suggestions',
+        'medication_suggestions',
+        'evidence_summary',
+        'monitoring_plan',
+        'doctor_considerations',
+        'next_steps',
+        'explainability',
+        'conversation_id',
+      ];
+    default:
+      return [
+        'patient_snapshot',
+        'patient_details',
+        'doctor_details',
+        'patient_metrics_context',
+        'clinical_snapshot',
+        'report_counts',
+        'latest_risk_summary',
+        'risk_narrative',
+        'risk_score',
+        'risk_label',
+        'risk_drivers',
+        'explanation',
+        'explainability',
+        'top_features',
+        'lifestyle_suggestions',
+        'medication_suggestions',
+        'medications',
+        'lifestyle_plan',
+        'latest_prescription',
+        'latest_lifestyle_plan',
+        'evidence_summary',
+        'monitoring_plan',
+        'next_steps',
+        'doctor_considerations',
+        'conversation_id',
+      ];
+  }
+}
+
+function buildVisibleSectionTabs(
+  reportType: string | null | undefined,
+  sections: GeneratedSection[],
+): SectionTabMeta[] {
+  const groupSet = new Set(sections.map((section) => section.group));
+  const overrides = SECTION_TAB_OVERRIDES[reportType ?? ''] ?? {};
+  const tabs: SectionTabMeta[] = [
+    { id: 'all', label: 'All', a11yLabel: 'All sections' },
+  ];
+
+  (['profile', 'recommendations', 'monitoring'] as const).forEach((group) => {
+    if (!groupSet.has(group)) return;
+    const base = DEFAULT_SECTION_TABS[group];
+    const override = overrides[group];
+    tabs.push({
+      id: group,
+      label: override?.label ?? base.label,
+      a11yLabel: override?.a11yLabel ?? base.a11yLabel,
+    });
+  });
+
+  return tabs;
+}
+
+function groupForGeneratedSectionKey(key: string): SectionGroup {
+  const normalized = key.toLowerCase();
+
+  if (
+    [
+      'patient_friendly_title',
+      'overview',
+      'patient_details',
+      'doctor_details',
+      'patient_metrics_context',
+      'clinical_snapshot',
+      'patient_snapshot',
+      'report_counts',
+      'protective_factors',
+      'active_concerns',
+    ].includes(normalized)
+  ) {
+    return 'profile';
+  }
+
+  if (
+    [
+      'lifestyle_suggestions',
+      'medication_suggestions',
+      'lifestyle_plan',
+      'medications',
+      'latest_prescription',
+      'latest_lifestyle_plan',
+      'evidence_summary',
+    ].includes(normalized)
+  ) {
+    return 'recommendations';
+  }
+
+  if (
+    [
+      'monitoring_plan',
+      'next_steps',
+      'doctor_considerations',
+      'risk_score',
+      'risk_label',
+      'explanation',
+      'top_features',
+      'source_reference',
+      'latest_risk_summary',
+      'risk_narrative',
+      'risk_drivers',
+      'explainability',
+      'conversation_id',
+    ].includes(normalized)
+  ) {
+    return 'monitoring';
+  }
+
+  if (
+    normalized.includes('patient') ||
+    normalized.includes('doctor') ||
+    normalized.includes('profile') ||
+    normalized.includes('snapshot') ||
+    normalized.includes('metric') ||
+    normalized.includes('count') ||
+    normalized.includes('overview') ||
+    normalized.includes('concern') ||
+    normalized.includes('protective')
+  ) {
+    return 'profile';
+  }
+
+  if (
+    normalized.includes('lifestyle') ||
+    normalized.includes('medication') ||
+    normalized.includes('prescription') ||
+    normalized.includes('guidance') ||
+    normalized.includes('treatment') ||
+    normalized.includes('evidence')
+  ) {
+    return 'recommendations';
+  }
+
+  return 'monitoring';
 }
 
 export default function ReportDetailsScreen() {
@@ -159,6 +398,64 @@ export default function ReportDetailsScreen() {
     }
   }, [canOpenInViewer, uploadedReport, router]);
 
+  const generatedSections = generatedReport
+    ? (() => {
+        const payload = generatedReport.structured_payload ?? {};
+        const orderedKeys = orderedGeneratedKeysForReportType(generatedReport.report_type);
+        const seen = new Set<string>();
+        const sections: GeneratedSection[] = [];
+        if (generatedReport.summary?.trim()) {
+          sections.push({
+            key: 'summary',
+            title: 'Summary',
+            text: generatedReport.summary.trim(),
+            group: 'monitoring',
+          });
+          seen.add('summary');
+        }
+        for (const key of orderedKeys) {
+          if (!(key in payload)) continue;
+          seen.add(key);
+          const text = flattenPayloadText(payload[key]);
+          if (!text.trim()) continue;
+          sections.push({
+            key,
+            title: prettifyKey(key),
+            text,
+            group: groupForGeneratedSectionKey(key) as Exclude<SectionGroup, 'all'>,
+          });
+        }
+        for (const [key, value] of Object.entries(payload)) {
+          if (seen.has(key)) continue;
+          const text = flattenPayloadText(value);
+          if (!text.trim()) continue;
+          sections.push({
+            key,
+            title: prettifyKey(key),
+            text,
+            group: groupForGeneratedSectionKey(key) as Exclude<SectionGroup, 'all'>,
+          });
+        }
+        return sections;
+      })()
+    : [];
+
+  const filteredSections =
+    sectionGroup === 'all'
+      ? generatedSections
+      : generatedSections.filter((section) => section.group === sectionGroup);
+
+  const visibleSectionTabs = buildVisibleSectionTabs(
+    generatedReport?.report_type,
+    generatedSections,
+  );
+
+  useEffect(() => {
+    if (!visibleSectionTabs.some((tab) => tab.id === sectionGroup)) {
+      setSectionGroup('all');
+    }
+  }, [sectionGroup, visibleSectionTabs]);
+
   if (authLoading || loading) {
     return (
       <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>
@@ -192,55 +489,6 @@ export default function ReportDetailsScreen() {
       </SafeAreaView>
     );
   }
-
-  const generatedSections = generatedReport
-    ? (() => {
-        const payload = generatedReport.structured_payload ?? {};
-        const orderedKeys = [
-          'patient_details',
-          'doctor_details',
-          'patient_metrics_context',
-          'lifestyle_suggestions',
-          'medication_suggestions',
-          'monitoring_plan',
-          'next_steps',
-          'doctor_considerations',
-        ];
-        const seen = new Set<string>();
-        const sections: Array<{ key: string; title: string; text: string; group: SectionGroup }> = [];
-        const groupForKey = (key: string): SectionGroup => {
-          if (
-            ['patient_details', 'doctor_details', 'patient_metrics_context', 'clinical_snapshot'].includes(
-              key,
-            )
-          ) {
-            return 'profile';
-          }
-          if (['lifestyle_suggestions', 'medication_suggestions'].includes(key)) {
-            return 'recommendations';
-          }
-          if (['monitoring_plan', 'next_steps', 'doctor_considerations'].includes(key)) {
-            return 'monitoring';
-          }
-          return 'monitoring';
-        };
-        for (const key of orderedKeys) {
-          if (!(key in payload)) continue;
-          seen.add(key);
-          const text = flattenPayloadText(payload[key]);
-          if (!text.trim()) continue;
-          sections.push({ key, title: prettifyKey(key), text, group: groupForKey(key) });
-        }
-        return sections;
-      })()
-    : [];
-
-  const filteredSections =
-    sectionGroup === 'all'
-      ? generatedSections
-      : generatedSections.filter((section) => section.group === sectionGroup);
-
-  const visibleSectionTabs = SECTION_TABS;
 
   return (
     <SafeAreaView className="flex-1 bg-bg-secondary" edges={['top']}>

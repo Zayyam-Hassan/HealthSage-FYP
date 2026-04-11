@@ -14,7 +14,11 @@ import {
 } from '../models/UploadedReport';
 import { Prescription } from '../models/Prescription';
 import { LifestylePlan } from '../models/LifestylePlan';
-import { callRiskExplain, callRiskPrediction } from '../integrations/fastapi/client';
+import {
+  callRiskExplain,
+  callRiskPrediction,
+  LONG_RUNNING_FASTAPI_TIMEOUT_MS,
+} from '../integrations/fastapi/client';
 import {
   createNotificationForDoctorProfile,
   createNotificationForPatientProfile,
@@ -647,8 +651,8 @@ function patientSnapshot(patient: PatientDocument) {
 export async function generateRiskSummaryReport(userId: string, patientId: string) {
   const { doctor, patient } = await requireManagedPatient(userId, patientId);
   const [prediction, explanation] = await Promise.all([
-    callRiskPrediction(patient.id).catch(() => null),
-    callRiskExplain(patient.id).catch(() => null),
+    callRiskPrediction(patient.id, LONG_RUNNING_FASTAPI_TIMEOUT_MS).catch(() => null),
+    callRiskExplain(patient.id, LONG_RUNNING_FASTAPI_TIMEOUT_MS).catch(() => null),
   ]);
 
   if (!prediction && !explanation) {
