@@ -5,6 +5,7 @@ import os
 from typing import Any, Dict, List
 
 import httpx
+from services.llm.base import resolve_timeout_seconds
 
 from .async_utils import run_coro_sync
 
@@ -19,7 +20,7 @@ except ImportError:
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.mistral.ai/v1/chat/completions")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "mistral-large-latest")
-LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "60"))
+LLM_TIMEOUT = resolve_timeout_seconds("LIFESTYLE_LLM_TIMEOUT")
 
 SYSTEM_PROMPT = (
     "You are a diabetes lifestyle assistant. "

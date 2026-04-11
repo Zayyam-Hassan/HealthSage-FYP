@@ -8,6 +8,8 @@ from typing import Any, Dict
 
 import httpx
 
+from .base import resolve_timeout_seconds
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -17,7 +19,7 @@ except ImportError:
 GROK_API_KEY = os.getenv("GROK_API_KEY") or os.getenv("LLM_API_KEY", "")
 GROK_BASE_URL = os.getenv("GROK_BASE_URL") or os.getenv("LLM_BASE_URL", "https://api.x.ai/v1/chat/completions")
 GROK_MODEL = os.getenv("GROK_MODEL") or os.getenv("LLM_MODEL", "grok-2-latest")
-GROK_TIMEOUT = float(os.getenv("GROK_TIMEOUT", "90"))
+GROK_TIMEOUT = resolve_timeout_seconds("GROK_TIMEOUT")
 
 
 def call_grok(system: str, user: str, temperature: float = 0.4) -> str:

@@ -10,6 +10,7 @@ import os
 from typing import Any, Dict
 
 import httpx
+from services.llm.base import resolve_timeout_seconds
 
 try:
     from dotenv import load_dotenv
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 GROK_API_KEY = os.getenv("GROK_API_KEY") or os.getenv("LLM_API_KEY", "")
 GROK_BASE_URL = os.getenv("GROK_BASE_URL") or os.getenv("LLM_BASE_URL", "https://api.x.ai/v1/chat/completions")
 GROK_MODEL = os.getenv("GROK_MODEL") or os.getenv("LLM_MODEL", "grok-2-latest")
+GROK_TIMEOUT = resolve_timeout_seconds("MEDICATION_GROK_TIMEOUT", "GROK_TIMEOUT")
 
 SYSTEM_PROMPT = """You are a clinical medication suggestion assistant for diabetes care.
 
@@ -68,7 +70,7 @@ def _call_grok(system: str, user: str) -> str:
         "Authorization": f"Bearer {GROK_API_KEY}",
         "Content-Type": "application/json",
     }
-    with httpx.Client(timeout=90.0) as client:
+    with httpx.Client(timeout=GROK_TIMEOUT) as client:
         resp = client.post(GROK_BASE_URL, headers=headers, json=payload)
         resp.raise_for_status()
         data = resp.json()

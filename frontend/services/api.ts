@@ -13,6 +13,15 @@ interface RequestOptions {
   timeoutMs?: number;
 }
 
+function isLongRunningEndpoint(endpoint: string) {
+  return (
+    endpoint.startsWith('/chatbot') ||
+    endpoint.startsWith('/reports/generated') ||
+    endpoint === '/reports/patient/overview' ||
+    endpoint.includes('/reports/generated/')
+  );
+}
+
 export interface ApiError {
   message: string;
   status?: number;
@@ -73,7 +82,11 @@ class ApiClient {
     const url = `${this.getBaseURL()}${endpoint}`;
 
     const controller = new AbortController();
-    const timeoutMs = requestOptions.timeoutMs ?? REQUEST_TIMEOUT_MS;
+    const timeoutMs =
+      requestOptions.timeoutMs ??
+      (isLongRunningEndpoint(endpoint)
+        ? LONG_RUNNING_REQUEST_TIMEOUT_MS
+        : REQUEST_TIMEOUT_MS);
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {

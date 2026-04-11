@@ -3,8 +3,10 @@ Retrieve medication guidance from the web using Serper. Prefer trusted sources (
 """
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import os
+import time
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -22,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
 SERPER_URL = "https://google.serper.dev/search"
+SERPER_TIMEOUT = float(os.getenv("SERPER_TIMEOUT", "15"))
+SERPER_MAX_WORKERS = max(1, int(os.getenv("SERPER_MAX_WORKERS", "4")))
+SERPER_MAX_BASE_QUERIES = max(1, int(os.getenv("SERPER_MAX_BASE_QUERIES", "5")))
+SERPER_MAX_TARGETED_DRUGS = max(1, int(os.getenv("SERPER_MAX_TARGETED_DRUGS", "2")))
 
 TRUSTED_DOMAINS = (
     "diabetesjournals.org",
@@ -51,7 +57,7 @@ def _search(query: str, num: int = 8) -> List[Dict[str, Any]]:
     payload = {"q": query, "num": num}
     headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
     try:
-        with httpx.Client(timeout=15.0) as client:
+        with httpx.Client(timeout=SERPER_TIMEOUT) as client:
             resp = client.post(SERPER_URL, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
@@ -64,6 +70,36 @@ def _search(query: str, num: int = 8) -> List[Dict[str, Any]]:
         for o in organic
         if o.get("link")
     ]
+
+
+def _search_many(queries: List[str], num: int = 5) -> List[Dict[str, Any]]:
+    """Run multiple Serper searches concurrently to avoid additive per-query latency."""
+    if not queries:
+        return []
+
+    results: List[Dict[str, Any]] = []
+    started_at = time.perf_counter()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(queries), SERPER_MAX_WORKERS)) as executor:
+        futures = {executor.submit(_search, query, num): query for query in queries}
+        for future in concurrent.futures.as_completed(futures):
+            query = futures[future]
+            try:
+                hits = future.result()
+            except Exception as exc:
+                logger.warning("Serper sub-search failed for '%s': %s", query, exc)
+                continue
+            results.extend(hits)
+
+    logger.info(
+        "medication_serper_batch_completed",
+        extra={
+            "query_count": len(queries),
+            "timeout_seconds": SERPER_TIMEOUT,
+            "duration_ms": round((time.perf_counter() - started_at) * 1000, 2),
+            "result_count": len(results),
+        },
+    )
+    return results
 
 
 def _is_trusted(link: str) -> bool:
@@ -130,7 +166,7 @@ def build_medication_web_queries(query: str, drug_names: Optional[List[str]] = N
             normalized_names.append(cleaned)
 
     if normalized_names:
-        for name in normalized_names[:4]:
+        for name in normalized_names[:SERPER_MAX_TARGETED_DRUGS]:
             terms.extend([
                 f"{name} diabetes medication site:drugbank.com",
                 f"{name} diabetes medication site:drugs.com",
@@ -148,7 +184,7 @@ def build_medication_web_queries(query: str, drug_names: Optional[List[str]] = N
         f"{query} diabetes medication treatment site:diabetes.org",
         f"{query} diabetes pharmacotherapy site:nih.gov",
     ])
-    return terms
+    return terms[:SERPER_MAX_BASE_QUERIES] if not normalized_names else terms
 
 
 def retrieve_medication_guidance(context: Dict[str, Any], top_k: int = 5) -> List[Dict[str, Any]]:
@@ -195,16 +231,15 @@ def retrieve_online_medication_evidence(
     """
     queries = build_medication_web_queries(query, drug_names=drug_names)
     aggregated: List[Dict[str, Any]] = []
-    for search_query in queries:
-        for result in _search(search_query, num=5):
-            link = (result.get("link") or "").strip()
-            if not link:
-                continue
-            aggregated.append({
-                "title": result.get("title", ""),
-                "url": link,
-                "snippet": result.get("snippet", ""),
-            })
+    for result in _search_many(queries, num=5):
+        link = (result.get("link") or "").strip()
+        if not link:
+            continue
+        aggregated.append({
+            "title": result.get("title", ""),
+            "url": link,
+            "snippet": result.get("snippet", ""),
+        })
 
     deduped = _dedupe_results(aggregated)
     trusted_first = [item for item in deduped if _is_trusted(item.get("url", ""))]

@@ -15,6 +15,7 @@ import httpx
 
 from app.schemas.chatbot import ChatbotRequest, ChatbotResponse
 from app.schemas.explainability import ExplainabilityPayload
+from services.llm.base import resolve_timeout_seconds
 
 from .doctor_comparison import compute_doctor_vs_model_diff
 from .doctor_treatment_agent import DoctorTreatmentAgent
@@ -37,6 +38,7 @@ logger = logging.getLogger(__name__)
 MASTER_LLM_API_KEY = os.getenv("GROK_API_KEY") or os.getenv("LLM_API_KEY", "")
 MASTER_LLM_BASE_URL = os.getenv("GROK_BASE_URL") or os.getenv("LLM_BASE_URL", "https://api.x.ai/v1/chat/completions")
 MASTER_LLM_MODEL = os.getenv("GROK_MODEL") or os.getenv("LLM_MODEL", "grok-2-latest")
+MASTER_LLM_TIMEOUT = resolve_timeout_seconds("MASTER_LLM_TIMEOUT", "GROK_TIMEOUT")
 
 TOOL_NAMES = [
     "get_risk",           # Prediction only (GraphSAGE score/label)
@@ -123,7 +125,7 @@ def _call_master_llm(system: str, user: str) -> str:
         "Authorization": f"Bearer {MASTER_LLM_API_KEY}",
         "Content-Type": "application/json",
     }
-    with httpx.Client(timeout=60.0) as client:
+    with httpx.Client(timeout=MASTER_LLM_TIMEOUT) as client:
         resp = client.post(MASTER_LLM_BASE_URL, headers=headers, json=payload)
         resp.raise_for_status()
         data = resp.json()
