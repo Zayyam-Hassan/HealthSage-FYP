@@ -67,7 +67,14 @@ export default function PsychiatristListScreen() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const filtered = useMemo(() => doctors, [doctors]);
+  const filtered = useMemo(() => {
+    return [...doctors].sort((a, b) => {
+      const aIsSelected = a.relationship?.is_selected ? 1 : 0;
+      const bIsSelected = b.relationship?.is_selected ? 1 : 0;
+
+      return bIsSelected - aIsSelected;
+    });
+  }, [doctors]);
 
   if (authLoading || loading) {
     return (
