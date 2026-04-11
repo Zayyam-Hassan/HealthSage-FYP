@@ -7,7 +7,12 @@ import { Patient } from '../models/Patient';
 import { Report } from '../models/Report';
 import { createNotificationForPatientProfile } from '../services/notificationsService';
 import { buildPatientCarePdfSections } from '../utils/patientCareReport';
-import { writeReportPdf } from '../utils/reportPdf';
+import { buildReportPdfBuffer } from '../utils/reportPdf';
+import {
+  deletePdfAttachment,
+  readPdfAttachment,
+  storePdfAttachment,
+} from '../utils/reportAttachmentStorage';
 
 const REPORT_SEND_COOLDOWN_MS = 5 * 60 * 1000;
 
@@ -40,13 +45,18 @@ function mapReport(doc: any) {
 }
 
 async function ensurePdfForReport(report: any) {
-  const filePath = await writeReportPdf(
+  const buffer = await buildReportPdfBuffer(
     report.id,
     report.title,
     buildPatientCarePdfSections(report.content ?? {}),
   );
+  const attachment = await storePdfAttachment({
+    title: report.title,
+    buffer,
+    uploadedByUserId: report.created_by_user_id ?? null,
+  });
 
-  report.attachment_path = filePath;
+  report.attachment_path = attachment.attachmentPath;
   report.attachment_url = buildDownloadUrl(report.id);
   await report.save();
 }
@@ -271,7 +281,7 @@ export async function sendReportToPatient(req: Request, res: Response): Promise<
     return;
   }
 
-  if (!report.attachment_path || !fs.existsSync(report.attachment_path)) {
+  if (!(await readPdfAttachment(report.attachment_path))) {
     await ensurePdfForReport(report);
   }
 
@@ -304,7 +314,17 @@ export async function downloadReportFile(req: Request, res: Response): Promise<v
   }
 
   const report = await getAccessibleReport(req, id);
-  if (!report || !report.attachment_path || !fs.existsSync(report.attachment_path)) {
+  if (!report) {
+    res.status(StatusCodes.NOT_FOUND).json({ message: 'Report file not found' });
+    return;
+  }
+
+  let attachment = await readPdfAttachment(report.attachment_path);
+  if (!attachment) {
+    await ensurePdfForReport(report);
+    attachment = await readPdfAttachment(report.attachment_path);
+  }
+  if (!attachment) {
     res.status(StatusCodes.NOT_FOUND).json({ message: 'Report file not found' });
     return;
   }
@@ -314,7 +334,8 @@ export async function downloadReportFile(req: Request, res: Response): Promise<v
     'Content-Disposition',
     `inline; filename="${report.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'report'}.pdf"`,
   );
-  res.sendFile(report.attachment_path);
+  res.setHeader('Content-Length', String(attachment.buffer.length));
+  res.send(attachment.buffer);
 }
 
 export async function deleteReport(req: Request, res: Response): Promise<void> {
@@ -330,9 +351,7 @@ export async function deleteReport(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  if (report.attachment_path && fs.existsSync(report.attachment_path)) {
-    await fs.promises.unlink(report.attachment_path).catch(() => null);
-  }
+  await deletePdfAttachment(report.attachment_path);
 
   await Report.findByIdAndDelete(id);
   res.status(StatusCodes.NO_CONTENT).send();

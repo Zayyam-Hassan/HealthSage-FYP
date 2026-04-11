@@ -19,7 +19,12 @@ import {
   createNotificationForDoctorProfile,
   createNotificationForPatientProfile,
 } from './notificationsService';
-import { writeReportPdf } from '../utils/reportPdf';
+import { buildReportPdfBuffer } from '../utils/reportPdf';
+import {
+  buildPdfAttachmentFileName,
+  readPdfAttachment,
+  storePdfAttachment,
+} from '../utils/reportAttachmentStorage';
 
 const SUPPORTED_UPLOAD_TYPES: Record<string, string> = {
   'application/pdf': 'pdf',
@@ -279,13 +284,18 @@ function buildPdfSectionsFromPayload(
 }
 
 async function ensureGeneratedPdf(report: ReportDocument) {
-  const filePath = await writeReportPdf(
+  const buffer = await buildReportPdfBuffer(
     report.id,
     report.title,
     buildPdfSectionsFromPayload(report.summary ?? '', report.content ?? {}),
   );
+  const attachment = await storePdfAttachment({
+    title: report.title,
+    buffer,
+    uploadedByUserId: report.created_by_user_id ?? null,
+  });
 
-  report.attachment_path = filePath;
+  report.attachment_path = attachment.attachmentPath;
   report.attachment_url = buildGeneratedFileUrl(report.id);
   await report.save();
 }
@@ -826,16 +836,18 @@ export async function getGeneratedReportFile(
   reportId: string,
 ) {
   const report = await getAccessibleGeneratedReport(userRole, userId, reportId);
-  if (!report.attachment_path || !fs.existsSync(report.attachment_path)) {
+  let attachment = await readPdfAttachment(report.attachment_path);
+  if (!attachment) {
     await ensureGeneratedPdf(report);
+    attachment = await readPdfAttachment(report.attachment_path);
   }
-  if (!report.attachment_path || !fs.existsSync(report.attachment_path)) {
+  if (!attachment) {
     throw new ReportModuleError(StatusCodes.NOT_FOUND, 'Generated report file not found');
   }
   return {
-    path: report.attachment_path,
-    fileName: `${report.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'report'}.pdf`,
-    mimeType: 'application/pdf',
+    buffer: attachment.buffer,
+    fileName: attachment.fileName || buildPdfAttachmentFileName(report.title),
+    mimeType: attachment.mimeType,
   };
 }
 

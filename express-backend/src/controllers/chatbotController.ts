@@ -15,7 +15,8 @@ import {
   callRecommendMedicationForPatient,
   callRiskExplain,
 } from '../integrations/fastapi/client';
-import { writeReportPdf } from '../utils/reportPdf';
+import { buildReportPdfBuffer } from '../utils/reportPdf';
+import { storePdfAttachment } from '../utils/reportAttachmentStorage';
 import {
   buildPatientCarePdfSections,
   buildPatientCareReportContent,
@@ -510,13 +511,20 @@ async function createPatientCareSummary(
     content,
   });
 
-  const attachmentPath = await writeReportPdf(
+  const attachmentBuffer = await buildReportPdfBuffer(
     report.id,
     report.title,
     buildPatientCarePdfSections(content),
   );
+  const attachment = await storePdfAttachment({
+    title: report.title,
+    buffer: attachmentBuffer,
+    uploadedByUserId: createdByUserId
+      ? new mongoose.Types.ObjectId(createdByUserId)
+      : null,
+  });
 
-  report.attachment_path = attachmentPath;
+  report.attachment_path = attachment.attachmentPath;
   report.attachment_url = `/mongo/reports/${report.id}/file`;
   await report.save();
 }

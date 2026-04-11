@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import PDFDocument from 'pdfkit';
 
 type ReportSection = {
@@ -137,15 +135,10 @@ async function buildPdfBuffer(title: string, sections: ReportSection[]) {
   });
 }
 
-export async function writeReportPdf(
-  reportId: string,
+export async function buildReportPdfBuffer(
+  _reportId: string,
   title: string,
   sections: ReportSection[],
 ) {
-  const reportsDir = path.join(process.cwd(), 'generated-reports');
-  await fs.promises.mkdir(reportsDir, { recursive: true });
-  const filePath = path.join(reportsDir, `${reportId}.pdf`);
-  const buffer = await buildPdfBuffer(title, sections);
-  await fs.promises.writeFile(filePath, buffer);
-  return filePath;
+  return buildPdfBuffer(title, sections);
 }
