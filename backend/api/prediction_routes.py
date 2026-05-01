@@ -23,6 +23,8 @@ async def graphsage_predict(
         if patient_uri:
             return predict_graphsage_patient(patient_uri, ttl_path)
         raise HTTPException(status_code=400, detail="Provide either patient_id (Mongo) or patient_uri (TTL)")
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as exc:
@@ -41,6 +43,8 @@ async def hgt_predict_endpoint(
         if patient_uri:
             return predict_hgt_patient(patient_uri, ttl_path)
         raise HTTPException(status_code=400, detail="Provide either patient_id (Mongo) or patient_uri (TTL)")
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as exc:
