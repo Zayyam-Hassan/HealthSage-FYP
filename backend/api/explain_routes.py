@@ -25,7 +25,7 @@ def _risk_label_to_predicted_label(risk_label: str) -> int:
 
 
 @router.post("/explain-risk", response_model=ExplainRiskResponse)
-async def explain_risk(
+def explain_risk(
     payload: ExplainRiskRequest,
     store: bool = Query(True, description="Store risk + explanation in risk_predictions"),
 ):

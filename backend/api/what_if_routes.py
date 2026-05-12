@@ -13,7 +13,7 @@ router = APIRouter(prefix="/what-if", tags=["what-if"])
 
 
 @router.get("/patients/{patient_id}/baseline", response_model=WhatIfBaselineResponse)
-async def get_what_if_baseline(patient_id: str):
+def get_what_if_baseline(patient_id: str):
     try:
         return build_baseline_response(patient_id)
     except ValueError as e:
@@ -25,7 +25,7 @@ async def get_what_if_baseline(patient_id: str):
 
 
 @router.post("/patients/{patient_id}/compare", response_model=WhatIfCompareResponse)
-async def compare_what_if_scenario(patient_id: str, payload: WhatIfScenarioRequest):
+def compare_what_if_scenario(patient_id: str, payload: WhatIfScenarioRequest):
     if not payload.modifications:
         raise HTTPException(status_code=422, detail="modifications must not be empty")
 

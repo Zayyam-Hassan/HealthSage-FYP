@@ -41,7 +41,7 @@ def _risk_audit_log(patient_id: str, result: Dict[str, Any], with_explanation: b
 
 
 @router.get("/{patient_id}")
-async def get_risk(patient_id: str):
+def get_risk(patient_id: str):
     """
     Returns GraphSAGE prediction only (for separate Risk Assessment tab).
     """
@@ -56,7 +56,7 @@ async def get_risk(patient_id: str):
 
 
 @router.get("/{patient_id}/explain")
-async def get_risk_explain(patient_id: str):
+def get_risk_explain(patient_id: str):
     """
     Returns GraphSAGE prediction plus graph/feature explanation.
     """

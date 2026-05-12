@@ -12,7 +12,7 @@ router = APIRouter(prefix="/prediction", tags=["prediction"])
 
 
 @router.get("/graphsage")
-async def graphsage_predict(
+def graphsage_predict(
     patient_id: str = Query(None, description="MongoDB patient ObjectId (preferred; uses Mongo + real features)"),
     patient_uri: str = Query(None, description="RDF patient URI (used when patient_id not set; TTL path)"),
     ttl_path: str = Query("output/healthsage_abox.ttl", description="Path to TTL graph (for patient_uri path)"),
@@ -32,7 +32,7 @@ async def graphsage_predict(
 
 
 @router.get("/hgt")
-async def hgt_predict_endpoint(
+def hgt_predict_endpoint(
     patient_id: str = Query(None, description="MongoDB patient ObjectId (preferred; uses Mongo + real features)"),
     patient_uri: str = Query(None, description="RDF patient URI (used when patient_id not set; TTL path)"),
     ttl_path: str = Query("output/healthsage_abox.ttl", description="Path to TTL graph (for patient_uri path)"),

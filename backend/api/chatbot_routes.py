@@ -218,7 +218,7 @@ def get_latest_patient_conversation(patient_id: str):
 
 
 @router.post("/chat", response_model=ChatWithHistoryResponse)
-async def chat_with_history(payload: ChatWithHistoryRequest):
+def chat_with_history(payload: ChatWithHistoryRequest):
     """
     ChatGPT-style chat: persists each turn to a conversation and messages.
     Pass conversation_id to continue a thread; omit to start a new one.
@@ -283,10 +283,10 @@ async def chat_with_history(payload: ChatWithHistoryRequest):
     mode = (chat_payload.mode or "recommend").strip().lower()
     if mode == "master":
         master = MasterAgent()
-        response = await run_in_threadpool(master.handle, chat_payload)
+        response = master.handle(chat_payload)
     else:
         coordinator = CoordinatorAgent()
-        response = await run_in_threadpool(coordinator.handle_request, chat_payload)
+        response = coordinator.handle_request(chat_payload)
     _audit_log(chat_payload, response)
 
     # Append assistant message
