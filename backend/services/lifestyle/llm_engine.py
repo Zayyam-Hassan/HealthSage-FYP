@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import random
 from typing import Any, Dict, List
 
 import httpx
 from services.llm.base import resolve_timeout_seconds
+from services.llm.concurrency import llm_async_slot
 
 from .async_utils import run_coro_sync
 
@@ -21,6 +24,9 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.mistral.ai/v1/chat/complet
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "mistral-large-latest")
 LLM_TIMEOUT = resolve_timeout_seconds("LIFESTYLE_LLM_TIMEOUT")
+# Mistral rate-limits hard when multiple tools hit the API in parallel; retry with backoff.
+_LLM_MAX_RETRIES = max(1, int(os.getenv("LIFESTYLE_LLM_MAX_RETRIES", "6")))
+_LLM_RETRY_BASE_SEC = float(os.getenv("LIFESTYLE_LLM_RETRY_BASE_SEC", "1.25"))
 
 SYSTEM_PROMPT = (
     "You are a diabetes lifestyle assistant. "
@@ -78,6 +84,18 @@ def _strip_code_fences(content: str) -> str:
     return text.strip()
 
 
+def _retry_delay_seconds(attempt: int, response: httpx.Response) -> float:
+    """Backoff for 429/5xx; honor Retry-After when numeric."""
+    delay = _LLM_RETRY_BASE_SEC * (2**attempt) + random.uniform(0.0, 0.75)
+    ra = response.headers.get("Retry-After")
+    if ra:
+        try:
+            delay = max(delay, float(ra))
+        except ValueError:
+            pass
+    return min(delay, 90.0)
+
+
 async def _call_llm_async(system: str, user: str) -> str:
     if not LLM_API_KEY:
         raise RuntimeError("LLM_API_KEY is not set; configure it in your environment.")
@@ -95,11 +113,24 @@ async def _call_llm_async(system: str, user: str) -> str:
     }
 
     async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
-        resp = await client.post(LLM_BASE_URL, headers=headers, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+        last_resp: httpx.Response | None = None
+        for attempt in range(_LLM_MAX_RETRIES):
+            async with llm_async_slot():
+                resp = await client.post(LLM_BASE_URL, headers=headers, json=payload)
+            last_resp = resp
+            if resp.status_code == 429 or resp.status_code in (502, 503, 504):
+                if attempt >= _LLM_MAX_RETRIES - 1:
+                    resp.raise_for_status()
+                wait_s = _retry_delay_seconds(attempt, resp)
+                await asyncio.sleep(wait_s)
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            return _extract_message_content(data)
 
-    return _extract_message_content(data)
+    if last_resp is not None:
+        last_resp.raise_for_status()
+    raise RuntimeError("Lifestyle LLM request failed with no response")
 
 
 def _call_llm(system: str, user: str) -> str:

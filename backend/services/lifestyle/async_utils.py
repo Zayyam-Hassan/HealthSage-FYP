@@ -15,9 +15,16 @@ def run_coro_sync(awaitable: Awaitable[T]) -> T:
     coroutine in a dedicated worker thread so sync callers can still block on
     the result safely.
     """
+    # Do not call asyncio.run() inside `except RuntimeError` — Python chains
+    # any raised error to that exception and logs a confusing traceback.
+    in_async_thread = False
     try:
         asyncio.get_running_loop()
+        in_async_thread = True
     except RuntimeError:
+        pass
+
+    if not in_async_thread:
         return asyncio.run(awaitable)
 
     with ThreadPoolExecutor(max_workers=1) as executor:

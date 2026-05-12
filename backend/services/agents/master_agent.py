@@ -7,7 +7,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
@@ -16,6 +18,7 @@ import httpx
 from app.schemas.chatbot import ChatbotRequest, ChatbotResponse
 from app.schemas.explainability import ExplainabilityPayload
 from services.llm.base import resolve_timeout_seconds
+from services.llm.concurrency import llm_sync_slot
 
 from .doctor_comparison import compute_doctor_vs_model_diff
 from .doctor_treatment_agent import DoctorTreatmentAgent
@@ -39,6 +42,20 @@ MASTER_LLM_API_KEY = os.getenv("GROK_API_KEY") or os.getenv("LLM_API_KEY", "")
 MASTER_LLM_BASE_URL = os.getenv("GROK_BASE_URL") or os.getenv("LLM_BASE_URL", "https://api.x.ai/v1/chat/completions")
 MASTER_LLM_MODEL = os.getenv("GROK_MODEL") or os.getenv("LLM_MODEL", "grok-2-latest")
 MASTER_LLM_TIMEOUT = resolve_timeout_seconds("MASTER_LLM_TIMEOUT", "GROK_TIMEOUT")
+_MASTER_LLM_MAX_RETRIES = max(1, int(os.getenv("MASTER_LLM_MAX_RETRIES", "6")))
+_MASTER_LLM_RETRY_BASE_SEC = float(os.getenv("MASTER_LLM_RETRY_BASE_SEC", "1.25"))
+
+
+def _master_retry_delay_seconds(attempt: int, response: httpx.Response) -> float:
+    delay = _MASTER_LLM_RETRY_BASE_SEC * (2**attempt) + random.uniform(0.0, 0.75)
+    ra = response.headers.get("Retry-After")
+    if ra:
+        try:
+            delay = max(delay, float(ra))
+        except ValueError:
+            pass
+    return min(delay, 90.0)
+
 
 TOOL_NAMES = [
     "get_risk",           # Prediction only (GraphSAGE score/label)
@@ -126,9 +143,16 @@ def _call_master_llm(system: str, user: str) -> str:
         "Content-Type": "application/json",
     }
     with httpx.Client(timeout=MASTER_LLM_TIMEOUT) as client:
-        resp = client.post(MASTER_LLM_BASE_URL, headers=headers, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+        data: Dict[str, Any] = {}
+        for attempt in range(_MASTER_LLM_MAX_RETRIES):
+            with llm_sync_slot():
+                resp = client.post(MASTER_LLM_BASE_URL, headers=headers, json=payload)
+            if resp.status_code in (429, 502, 503, 504) and attempt < _MASTER_LLM_MAX_RETRIES - 1:
+                time.sleep(_master_retry_delay_seconds(attempt, resp))
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            break
     if "choices" in data:
         content = data["choices"][0].get("message", {}).get("content", "")
     else:

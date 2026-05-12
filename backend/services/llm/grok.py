@@ -9,6 +9,7 @@ from typing import Any, Dict
 import httpx
 
 from .base import resolve_timeout_seconds
+from .concurrency import llm_sync_slot
 
 try:
     from dotenv import load_dotenv
@@ -38,10 +39,11 @@ def call_grok(system: str, user: str, temperature: float = 0.4) -> str:
         "Authorization": f"Bearer {GROK_API_KEY}",
         "Content-Type": "application/json",
     }
-    with httpx.Client(timeout=GROK_TIMEOUT) as client:
-        resp = client.post(GROK_BASE_URL, headers=headers, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+    with llm_sync_slot():
+        with httpx.Client(timeout=GROK_TIMEOUT) as client:
+            resp = client.post(GROK_BASE_URL, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
     if "choices" in data:
         content = data["choices"][0].get("message", {}).get("content", "")
     else:
