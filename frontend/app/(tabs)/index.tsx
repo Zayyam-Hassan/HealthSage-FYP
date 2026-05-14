@@ -45,6 +45,7 @@ type WorkspaceLink = {
 const patientWorkspaceLinks: WorkspaceLink[] = [
   { id: 'assessment', title: 'Health form', route: '/assessment', icon: 'clipboard-outline' },
   { id: 'treatment', title: 'Treatment plan', route: '/doctor-treatment-plan', icon: 'medkit-outline' },
+  { id: 'trends', title: 'Trends', route: '/trends', icon: 'trending-up-outline' },
   { id: 'doctor', title: 'Choose doctor', route: '/psychiatrist', icon: 'people-outline' },
   { id: 'reports', title: 'Reports', route: '/reports', icon: 'document-text-outline' },
 ];
@@ -53,6 +54,7 @@ const patientWorkspaceLinks: WorkspaceLink[] = [
 const doctorWorkspaceLinks: WorkspaceLink[] = [
   { id: 'patients', title: 'Patients', route: '/patients', icon: 'people-outline' },
   { id: 'appointments', title: 'Schedule', route: '/appointments', icon: 'calendar-outline' },
+  { id: 'trends', title: 'Trends', route: '/trends', icon: 'trending-up-outline' },
   { id: 'reports', title: 'Reports', route: '/reports', icon: 'document-text-outline' },
   { id: 'risk', title: 'Risk', route: '/risk', icon: 'pulse-outline' },
   { id: 'chatbot', title: 'Assistant', route: '/chatbot', icon: 'chatbubbles-outline' },

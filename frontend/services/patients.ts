@@ -64,6 +64,28 @@ export interface Patient {
 
 export type PatientListItem = Patient;
 
+export interface GlucoseReading {
+  code: string;
+  value: number;
+  unit: string | null;
+  recorded_at: string | null;
+}
+
+export interface GlucoseHistoryResponse {
+  patient_id: string;
+  range: '7d' | '30d';
+  readings: GlucoseReading[];
+}
+
+export type ObservationRange = '7d' | '30d' | '90d' | '1y' | 'all';
+
+export interface ObservationHistoryResponse {
+  patient_id: string;
+  range: ObservationRange;
+  codes: string[];
+  readings: GlucoseReading[];
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
@@ -139,6 +161,26 @@ class PatientsService {
 
   async getPatient(patientId: string): Promise<Patient> {
     return apiClient.get<Patient>(`${BASE}/${patientId}`);
+  }
+
+  async getGlucoseHistory(
+    patientId: string,
+    range: '7d' | '30d' = '7d',
+  ): Promise<GlucoseHistoryResponse> {
+    return apiClient.get<GlucoseHistoryResponse>(
+      `${BASE}/${patientId}/glucose-history?range=${range}`,
+    );
+  }
+
+  async getObservationHistory(
+    patientId: string,
+    options: { codes: string[]; range?: ObservationRange },
+  ): Promise<ObservationHistoryResponse> {
+    const range = options.range ?? '30d';
+    const codes = encodeURIComponent(options.codes.join(','));
+    return apiClient.get<ObservationHistoryResponse>(
+      `${BASE}/${patientId}/observation-history?codes=${codes}&range=${range}`,
+    );
   }
 
   async updateMyClinicalProfile(data: PatientFormValues): Promise<Patient> {

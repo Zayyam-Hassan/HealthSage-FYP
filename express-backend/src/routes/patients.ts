@@ -9,6 +9,7 @@ import {
   updateMyClinicalProfile,
   updatePatient,
 } from '../controllers/patientsController';
+import { getObservationHistory } from '../controllers/historyController';
 
 const router = Router();
 
@@ -23,6 +24,8 @@ router.patch(
 );
 router.post('/', requireAuth, requireRole(['doctor', 'admin']), createPatient);
 router.get('/:id', requireAuth, getPatient);
+router.get('/:id/glucose-history', requireAuth, getObservationHistory);
+router.get('/:id/observation-history', requireAuth, getObservationHistory);
 router.patch('/:id', requireAuth, updatePatient);
 router.delete('/:id', requireAuth, requireRole(['doctor', 'admin']), deletePatient);
 

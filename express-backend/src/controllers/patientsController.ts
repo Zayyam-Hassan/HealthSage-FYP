@@ -158,7 +158,7 @@ export async function getPatientMe(req: Request, res: Response): Promise<void> {
   res.json(await mapPatient(patient, { is_self: true }));
 }
 
-async function canAccessPatient(req: Request, patient: any): Promise<boolean> {
+export async function canAccessPatient(req: Request, patient: any): Promise<boolean> {
   if (!req.user) return false;
   if (req.user.role === 'admin') return true;
   if (req.user.role === 'patient') {

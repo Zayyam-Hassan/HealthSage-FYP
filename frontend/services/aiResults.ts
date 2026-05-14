@@ -23,6 +23,18 @@ export interface RiskPredictionResponse {
   clinical_summary: string;
 }
 
+export interface RiskHistoryPoint {
+  date: string | null;
+  risk_score: number;
+  risk_label: 'low' | 'medium' | 'high';
+  model_name: string;
+}
+
+export interface RiskHistoryResponse {
+  patient_id: string;
+  history: RiskHistoryPoint[];
+}
+
 export interface CompatibilityResponse {
   patient_id: string;
   medication_id: string;
@@ -108,6 +120,13 @@ class AIResultsService {
       recommendations,
       clinical_summary: clinicalSummary,
     };
+  }
+
+  /**
+   * Uses backend GET /risk/{patient_id}/history — risk score progression over time.
+   */
+  async getRiskHistory(patientId: string): Promise<RiskHistoryResponse> {
+    return await apiClient.get<RiskHistoryResponse>(`/risk/${patientId}/history`);
   }
 
   /**

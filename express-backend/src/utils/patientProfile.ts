@@ -140,37 +140,34 @@ export async function syncPatientClinicalCollections(
     diastolic_bp: payload.vital_signs?.diastolic_bp,
   };
 
-  Object.entries(observationFieldSpecs).forEach(([field, spec]) => {
-    const value = numericValues[field];
-    if (value === undefined) {
-      ops.push(
-        Observation.deleteMany({
-          patient_id: patientId,
-          observation_code: spec.code,
-        }),
-      );
-      return;
-    }
+  // observations is a time-series log: append a new reading when the value
+  // changes so charts can show progression, but skip no-op profile saves that
+  // would otherwise flood the series with identical same-day points.
+  const appendOps = Object.entries(observationFieldSpecs).map(
+    async ([field, spec]) => {
+      const value = numericValues[field];
+      if (value === undefined) {
+        return;
+      }
+      const latest = await Observation.findOne({
+        patient_id: patientId,
+        observation_code: spec.code,
+      }).sort({ effective_at: -1, created_at: -1 });
 
-    ops.push(
-      Observation.updateOne(
-        {
-          patient_id: patientId,
-          observation_code: spec.code,
-        },
-        {
-          $set: {
-            patient_id: patientId,
-            observation_code: spec.code,
-            value_numeric: value,
-            unit: spec.unit,
-            effective_at: new Date(),
-          },
-        },
-        { upsert: true },
-      ),
-    );
-  });
+      if (latest && latest.value_numeric === value) {
+        return;
+      }
+
+      await Observation.create({
+        patient_id: patientId,
+        observation_code: spec.code,
+        value_numeric: value,
+        unit: spec.unit,
+        effective_at: new Date(),
+      });
+    },
+  );
+  ops.push(...appendOps);
 
   ops.push(Condition.deleteMany({ patient_id: patientId }));
   const conditions = payload.conditions ?? [];

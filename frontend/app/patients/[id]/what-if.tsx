@@ -10,6 +10,7 @@ import Card from '@/components/Card';
 import Header from '@/components/Header';
 import Input from '@/components/Input';
 import SectionHeader from '@/components/SectionHeader';
+import WhatIfComparisonChart from '@/components/WhatIfComparisonChart';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { formatApiError } from '@/src/shared/utils/formatApiError';
@@ -480,6 +481,15 @@ export default function PatientWhatIfScreen() {
                     Direction: {result.risk_delta.direction.replace('_', ' ')}
                   </Text>
                 </View>
+              </Card>
+
+              <Card className="mb-5 overflow-hidden">
+                <WhatIfComparisonChart
+                  baselineScore={result.baseline.risk_score}
+                  scenarioScore={result.scenario.risk_score}
+                  baselineLabel={result.baseline.risk_label}
+                  scenarioLabel={result.scenario.risk_label}
+                />
               </Card>
 
               <Card className="mb-5">

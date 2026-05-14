@@ -8,17 +8,13 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import RecordForPatientHeader from '@/components/RecordForPatientHeader';
 import SearchBar from '@/components/searchbar';
+import ExplainabilityPanel from '@/components/ExplainabilityPanel';
 import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
 import { formatApiError } from '@/src/shared/utils/formatApiError';
 import { useAppDialog } from '@/src/shared/hooks/useAppDialog';
 import { aiResultsService } from '@/services/aiResults';
 import { useAuth } from '@/src/features/auth/hooks/useAuth';
 import { patientsService, type Patient } from '@/services/patients';
-
-type FeatureBar = {
-  label: string;
-  percent: number;
-};
 
 export default function RiskPredictionScreen() {
   const router = useRouter();
@@ -32,7 +28,7 @@ export default function RiskPredictionScreen() {
   const [riskScore, setRiskScore] = useState<number | null>(null);
   const [riskClass, setRiskClass] = useState<'low' | 'medium' | 'high'>('low');
   const [summary, setSummary] = useState('');
-  const [featureBars, setFeatureBars] = useState<FeatureBar[]>([]);
+  const [clinicalFactors, setClinicalFactors] = useState<string[]>([]);
   const { dialog, hideDialog, showDialog } = useAppDialog();
 
   useEffect(() => {
@@ -81,17 +77,12 @@ export default function RiskPredictionScreen() {
 
     try {
       setLoading(true);
-      setFeatureBars([]);
+      setClinicalFactors([]);
       const prediction = await aiResultsService.predictRisk(patientId);
       setRiskScore(Math.round((prediction.risk_score ?? 0) * 100));
       setRiskClass(prediction.risk_class);
       setSummary(prediction.clinical_summary);
-      setFeatureBars(
-        (prediction.factors.clinical ?? []).slice(0, 6).map((item, index) => ({
-          label: item.split('(')[0].trim() || `Feature ${index + 1}`,
-          percent: Math.max(8, 100 - index * 12),
-        })),
-      );
+      setClinicalFactors(prediction.factors.clinical ?? []);
     } catch (error: unknown) {
       showDialog('Prediction failed', formatApiError(error, 'Please try again.'));
     } finally {
@@ -277,35 +268,10 @@ export default function RiskPredictionScreen() {
                 </Card>
               ) : null}
 
-              <Card className="border-border/80">
-                <Text className="text-base font-semibold text-text mb-4 tracking-tight">
-                  Key contributing fields
-                </Text>
-                {featureBars.length > 0 ? (
-                  featureBars.map((feature) => (
-                    <View key={feature.label} className="mb-4 last:mb-0">
-                      <View className="flex-row items-center justify-between mb-1">
-                        <Text className="text-sm font-medium text-text">
-                          {feature.label}
-                        </Text>
-                        <Text className="text-xs text-text-secondary">
-                          {feature.percent}%
-                        </Text>
-                      </View>
-                      <View className="h-3 bg-bg-secondary rounded-full overflow-hidden">
-                        <View
-                          className="h-full bg-error rounded-full"
-                          style={{ width: `${Math.min(feature.percent, 100)}%` }}
-                        />
-                      </View>
-                    </View>
-                  ))
-                ) : (
-                  <Text className="text-sm text-text-secondary">
-                    The model did not return feature bars for this prediction.
-                  </Text>
-                )}
-              </Card>
+              <ExplainabilityPanel
+                factors={clinicalFactors}
+                className="border-border/80"
+              />
             </>
           )}
         </View>
