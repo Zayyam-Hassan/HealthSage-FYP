@@ -1,0 +1,154 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { colors } from '@/constants/colors';
+import { useFocusEffect } from '@react-navigation/native';
+import Avatar from '@/components/Avatar';
+import Button from '@/components/Button';
+import Card from '@/components/Card';
+import Header from '@/components/Header';
+import { CenteredScreenLoader } from '@/src/shared/components/CenteredScreenLoader';
+import { useAuth } from '@/src/features/auth/hooks/useAuth';
+import { doctorsService } from '@/services/doctors';
+import { patientsService } from '@/services/patients';
+import { resolveApiAssetUrl } from '@/utils/apiAssetUrl';
+
+export default function ProfileScreen() {
+  const router = useRouter();
+  const { user, refreshUser, logout, isLoading: authLoading } = useAuth();
+  const [meta, setMeta] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+
+  const loadProfile = useCallback(async () => {
+    try {
+      const currentUser = await refreshUser();
+
+      if (currentUser?.role === 'doctor') {
+        const doctor = await doctorsService.getDoctorMe();
+        setMeta({
+          roleLabel: 'Doctor',
+          subtitle: doctor.specialization,
+          detail: `${doctor.stats?.patient_count ?? 0} assigned patients`,
+        });
+      } else if (currentUser?.role === 'patient') {
+        const patient = await patientsService.getMyPatientProfile();
+        setMeta({
+          roleLabel: 'Patient',
+          subtitle: patient.assignment.doctor
+            ? `Doctor: ${patient.assignment.doctor.name}`
+            : 'No doctor assigned yet',
+          detail: `Patient ID: ${patient.patient_id}`,
+        });
+      } else {
+        setMeta({});
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [refreshUser]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    loadProfile();
+  }, [authLoading, loadProfile]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!authLoading) {
+        loadProfile();
+      }
+    }, [authLoading, loadProfile]),
+  );
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/(auth)/login');
+  };
+
+  if (authLoading || loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+        <Header variant="coral" title="Profile" />
+        <CenteredScreenLoader />
+      </SafeAreaView>
+    );
+  }
+
+  const avatarUri = resolveApiAssetUrl(user?.avatar_url);
+
+  return (
+    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+      <Header variant="coral" title="Profile" />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 120 }}
+      >
+        <View className="px-6 pt-6">
+          <Card className="mb-6 bg-bg-secondary border-primary/12 shadow-sm">
+            <View className="items-center">
+              <Avatar
+                size="xl"
+                source={avatarUri ? { uri: avatarUri } : undefined}
+                name={user?.display_name || 'User'}
+                className="mb-4"
+              />
+              <Text className="text-2xl font-bold text-text mb-1 tracking-tight">
+                {user?.display_name || 'User'}
+              </Text>
+              <Text className="text-sm text-text-secondary mb-1">{user?.email}</Text>
+              <View className="mt-1 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/15">
+                <Text className="text-sm font-semibold text-primary">
+                  {meta.roleLabel || user?.role || 'User'}
+                </Text>
+              </View>
+              <Text className="text-sm text-text-secondary mt-3 text-center leading-5">
+                {meta.subtitle}
+              </Text>
+              <Text className="text-xs text-text-tertiary mt-1 text-center">{meta.detail}</Text>
+            </View>
+          </Card>
+
+          <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-secondary mb-3 px-1">
+            Account
+          </Text>
+          {[
+            { id: 'edit', title: 'Edit profile', route: '/settings/edit-profile', badge: 0 },
+            { id: 'password', title: 'Change password', route: '/settings/change-password', badge: 0 },
+            { id: 'reports', title: 'Reports', route: '/reports', badge: 0 },
+            { id: 'help', title: 'Help and support', route: '/help-support', badge: 0 },
+          ].map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              onPress={() => router.push(item.route as any)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={item.title}
+            >
+              <Card className="mb-3 py-3.5 border-border/80">
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center flex-1">
+                    <Text className="text-base font-semibold text-text leading-6">{item.title}</Text>
+                    {item.badge > 0 ? (
+                      <View className="ml-2 min-w-[22px] h-[22px] px-1.5 rounded-full bg-primary items-center justify-center">
+                        <Text className="text-xs font-bold text-white">
+                          {item.badge > 99 ? '99+' : item.badge}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
+                </View>
+              </Card>
+            </TouchableOpacity>
+          ))}
+
+          <Button variant="outline" fullWidth className="mt-4" onPress={handleLogout}>
+            Logout
+          </Button>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}

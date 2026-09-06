@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\zayyamhassan\\\\Downloads\\\\HealthSage-FYP\" -Force | Select-Object Name, @{N='Type';E={if\\($_.PSIsContainer\\){'Directory'}else{'File'}}} | Format-Table -AutoSize)",
+      "Bash(npx expo *)",
+      "Bash(npm install *)",
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\('svg:', p.dependencies['react-native-svg']\\); console.log\\('gifted:', p.dependencies['react-native-gifted-charts']\\);\")",
+      "Bash(npx tsc *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\zayyamhassan\\\\Downloads\\\\HealthSage-FYP\\\\frontend\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\zayyamhassan\\\\Downloads\\\\HealthSage-FYP\" -Directory)",
+      "Bash(grep -rl \"express-async-errors\" src/)",
+      "Bash(grep -n \"express-async-errors\\\\|asyncHandler\" src/server.ts src/app.ts package.json)",
+      "Bash(npm run *)"
+    ]
+  }
+}

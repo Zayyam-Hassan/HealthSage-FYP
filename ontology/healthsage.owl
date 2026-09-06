@@ -1,0 +1,581 @@
+<?xml version="1.0"?>
+<rdf:RDF
+    xmlns="http://healthsage.org/ontology#"
+    xml:base="http://healthsage.org/ontology"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema#">
+
+  <owl:Ontology rdf:about="http://healthsage.org/ontology">
+    <rdfs:label>HealthSage Operational Ontology</rdfs:label>
+    <rdfs:comment>
+      Operational ontology for HealthSage: MongoDB is canonical, Neo4j is derived.
+      Standards are attributes: ICD-10 for conditions, LOINC for observations, RxNorm for medications.
+      Includes explicit feature contract layer for GraphSAGE and explainability snapshots.
+    </rdfs:comment>
+  </owl:Ontology>
+
+  <!-- ===================== -->
+  <!-- CLASSES               -->
+  <!-- ===================== -->
+
+  <owl:Class rdf:about="#Patient"/>
+  <owl:Class rdf:about="#Encounter"/>
+
+  <owl:Class rdf:about="#ObservationDefinition"/>
+  <owl:Class rdf:about="#Observation"/>
+
+  <owl:Class rdf:about="#Condition"/>
+
+  <owl:Class rdf:about="#MedicationKnowledge"/>
+  <owl:Class rdf:about="#PatientMedicationEvent"/>
+
+  <owl:Class rdf:about="#LifestyleSuggestion"/>
+  <owl:Class rdf:about="#MedicationSuggestion"/>
+
+  <owl:Class rdf:about="#GuidelineChunk"/>
+
+  <owl:Class rdf:about="#FeatureDefinition"/>
+  <owl:Class rdf:about="#FeatureVectorSnapshot"/>
+
+  <owl:Class rdf:about="#RiskPrediction"/>
+  <owl:Class rdf:about="#Explanation"/>
+
+  <owl:Class rdf:about="#AuditLog"/>
+
+  <!-- ===================== -->
+  <!-- OBJECT PROPERTIES     -->
+  <!-- ===================== -->
+
+  <!-- Patient core links -->
+  <owl:ObjectProperty rdf:about="#hasEncounter">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="#Encounter"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#hasObservation">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="#Observation"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#hasCondition">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="#Condition"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#hasMedicationEvent">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="#PatientMedicationEvent"/>
+  </owl:ObjectProperty>
+
+  <!-- Encounter optional links -->
+  <owl:ObjectProperty rdf:about="#encounterHasObservation">
+    <rdfs:domain rdf:resource="#Encounter"/>
+    <rdfs:range rdf:resource="#Observation"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#encounterHasCondition">
+    <rdfs:domain rdf:resource="#Encounter"/>
+    <rdfs:range rdf:resource="#Condition"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#encounterHasMedicationEvent">
+    <rdfs:domain rdf:resource="#Encounter"/>
+    <rdfs:range rdf:resource="#PatientMedicationEvent"/>
+  </owl:ObjectProperty>
+
+  <!-- Observation typing -->
+  <owl:ObjectProperty rdf:about="#instanceOf">
+    <rdfs:domain rdf:resource="#Observation"/>
+    <rdfs:range rdf:resource="#ObservationDefinition"/>
+  </owl:ObjectProperty>
+
+  <!-- Medication suggestion to drug knowledge -->
+  <owl:ObjectProperty rdf:about="#suggestsMedication">
+    <rdfs:domain rdf:resource="#MedicationSuggestion"/>
+    <rdfs:range rdf:resource="#MedicationKnowledge"/>
+  </owl:ObjectProperty>
+
+  <!-- Patient medication event to drug knowledge -->
+  <owl:ObjectProperty rdf:about="#eventMedication">
+    <rdfs:domain rdf:resource="#PatientMedicationEvent"/>
+    <rdfs:range rdf:resource="#MedicationKnowledge"/>
+  </owl:ObjectProperty>
+
+  <!-- Guideline citations -->
+  <owl:ObjectProperty rdf:about="#citesGuideline">
+    <rdfs:domain rdf:resource="#LifestyleSuggestion"/>
+    <rdfs:range rdf:resource="#GuidelineChunk"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#citesGuidelineMedication">
+    <rdfs:domain rdf:resource="#MedicationSuggestion"/>
+    <rdfs:range rdf:resource="#GuidelineChunk"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#citesGuidelineExplanation">
+    <rdfs:domain rdf:resource="#Explanation"/>
+    <rdfs:range rdf:resource="#GuidelineChunk"/>
+  </owl:ObjectProperty>
+
+  <!-- Risk prediction and feature snapshots -->
+  <owl:ObjectProperty rdf:about="#usedSnapshot">
+    <rdfs:domain rdf:resource="#RiskPrediction"/>
+    <rdfs:range rdf:resource="#FeatureVectorSnapshot"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#hasRiskPrediction">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="#RiskPrediction"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#hasFeatureSnapshot">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="#FeatureVectorSnapshot"/>
+  </owl:ObjectProperty>
+
+  <!-- Suggestions -->
+  <owl:ObjectProperty rdf:about="#hasLifestyleSuggestion">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="#LifestyleSuggestion"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#hasMedicationSuggestion">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="#MedicationSuggestion"/>
+  </owl:ObjectProperty>
+
+  <!-- Explanations -->
+  <owl:ObjectProperty rdf:about="#hasExplanation">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="#Explanation"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#explainsRiskPrediction">
+    <rdfs:domain rdf:resource="#Explanation"/>
+    <rdfs:range rdf:resource="#RiskPrediction"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#explainsLifestyleSuggestion">
+    <rdfs:domain rdf:resource="#Explanation"/>
+    <rdfs:range rdf:resource="#LifestyleSuggestion"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="#explainsMedicationSuggestion">
+    <rdfs:domain rdf:resource="#Explanation"/>
+    <rdfs:range rdf:resource="#MedicationSuggestion"/>
+  </owl:ObjectProperty>
+
+  <!-- Audit -->
+  <owl:ObjectProperty rdf:about="#hasAuditLog">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="#AuditLog"/>
+  </owl:ObjectProperty>
+
+  <!-- ===================== -->
+  <!-- DATA PROPERTIES       -->
+  <!-- ===================== -->
+
+  <!-- IDs and timestamps -->
+  <owl:DatatypeProperty rdf:about="#patientId">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#createdAt">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="&xsd;dateTime"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#updatedAt">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="&xsd;dateTime"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#timestamp">
+    <rdfs:domain rdf:resource="#Observation"/>
+    <rdfs:range rdf:resource="&xsd;dateTime"/>
+  </owl:DatatypeProperty>
+
+  <!-- Patient demographics -->
+  <owl:DatatypeProperty rdf:about="#age">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="&xsd;integer"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#sex">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#heightCm">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="&xsd;decimal"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#weightKg">
+    <rdfs:domain rdf:resource="#Patient"/>
+    <rdfs:range rdf:resource="&xsd;decimal"/>
+  </owl:DatatypeProperty>
+
+  <!-- ObservationDefinition fields -->
+  <owl:DatatypeProperty rdf:about="#obsCode">
+    <rdfs:domain rdf:resource="#ObservationDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#displayName">
+    <rdfs:domain rdf:resource="#ObservationDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#category">
+    <rdfs:domain rdf:resource="#ObservationDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#loinc">
+    <rdfs:domain rdf:resource="#ObservationDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#valueType">
+    <rdfs:domain rdf:resource="#ObservationDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#unitExpected">
+    <rdfs:domain rdf:resource="#ObservationDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#validMin">
+    <rdfs:domain rdf:resource="#ObservationDefinition"/>
+    <rdfs:range rdf:resource="&xsd;decimal"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#validMax">
+    <rdfs:domain rdf:resource="#ObservationDefinition"/>
+    <rdfs:range rdf:resource="&xsd;decimal"/>
+  </owl:DatatypeProperty>
+
+  <!-- Observation fields -->
+  <owl:DatatypeProperty rdf:about="#observationId">
+    <rdfs:domain rdf:resource="#Observation"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#obsCodeValue">
+    <rdfs:domain rdf:resource="#Observation"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+    <rdfs:comment>
+      Convenience field for storing obs_code directly on Observation. Canonical typing is via instanceOf.
+    </rdfs:comment>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#valueNumeric">
+    <rdfs:domain rdf:resource="#Observation"/>
+    <rdfs:range rdf:resource="&xsd;decimal"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#valueText">
+    <rdfs:domain rdf:resource="#Observation"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#unit">
+    <rdfs:domain rdf:resource="#Observation"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#sourceType">
+    <rdfs:domain rdf:resource="#Observation"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#sourceId">
+    <rdfs:domain rdf:resource="#Observation"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#sourceColumn">
+    <rdfs:domain rdf:resource="#Observation"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <!-- Condition fields -->
+  <owl:DatatypeProperty rdf:about="#conditionId">
+    <rdfs:domain rdf:resource="#Condition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#conditionName">
+    <rdfs:domain rdf:resource="#Condition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#icd10">
+    <rdfs:domain rdf:resource="#Condition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#conditionStatus">
+    <rdfs:domain rdf:resource="#Condition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <!-- MedicationKnowledge fields -->
+  <owl:DatatypeProperty rdf:about="#medId">
+    <rdfs:domain rdf:resource="#MedicationKnowledge"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#medName">
+    <rdfs:domain rdf:resource="#MedicationKnowledge"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#rxnorm">
+    <rdfs:domain rdf:resource="#MedicationKnowledge"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#drugClass">
+    <rdfs:domain rdf:resource="#MedicationKnowledge"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <!-- PatientMedicationEvent fields -->
+  <owl:DatatypeProperty rdf:about="#patientMedEventId">
+    <rdfs:domain rdf:resource="#PatientMedicationEvent"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#dose">
+    <rdfs:domain rdf:resource="#PatientMedicationEvent"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#frequency">
+    <rdfs:domain rdf:resource="#PatientMedicationEvent"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#route">
+    <rdfs:domain rdf:resource="#PatientMedicationEvent"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#startDate">
+    <rdfs:domain rdf:resource="#PatientMedicationEvent"/>
+    <rdfs:range rdf:resource="&xsd;date"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#endDate">
+    <rdfs:domain rdf:resource="#PatientMedicationEvent"/>
+    <rdfs:range rdf:resource="&xsd;date"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#medEventStatus">
+    <rdfs:domain rdf:resource="#PatientMedicationEvent"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <!-- Suggestion common fields -->
+  <owl:DatatypeProperty rdf:about="#suggestionId">
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#suggestionCreatedAt">
+    <rdfs:range rdf:resource="&xsd;dateTime"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#modelName">
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#modelVersion">
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <!-- LifestyleSuggestion fields -->
+  <owl:DatatypeProperty rdf:about="#lifestyleDomain">
+    <rdfs:domain rdf:resource="#LifestyleSuggestion"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#lifestylePlan">
+    <rdfs:domain rdf:resource="#LifestyleSuggestion"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#lifestyleRationale">
+    <rdfs:domain rdf:resource="#LifestyleSuggestion"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <!-- MedicationSuggestion fields -->
+  <owl:DatatypeProperty rdf:about="#medSuggestionJSON">
+    <rdfs:domain rdf:resource="#MedicationSuggestion"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+    <rdfs:comment>
+      Store structured JSON payload as string if needed; canonical app storage is in MongoDB.
+    </rdfs:comment>
+  </owl:DatatypeProperty>
+
+  <!-- GuidelineChunk fields -->
+  <owl:DatatypeProperty rdf:about="#chunkId">
+    <rdfs:domain rdf:resource="#GuidelineChunk"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#guidelineSource">
+    <rdfs:domain rdf:resource="#GuidelineChunk"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#topic">
+    <rdfs:domain rdf:resource="#GuidelineChunk"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#text">
+    <rdfs:domain rdf:resource="#GuidelineChunk"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#citation">
+    <rdfs:domain rdf:resource="#GuidelineChunk"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <!-- FeatureDefinition fields -->
+  <owl:DatatypeProperty rdf:about="#featureId">
+    <rdfs:domain rdf:resource="#FeatureDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#featureDisplayName">
+    <rdfs:domain rdf:resource="#FeatureDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#featureSourceType">
+    <rdfs:domain rdf:resource="#FeatureDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#featureObsCode">
+    <rdfs:domain rdf:resource="#FeatureDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#aggregation">
+    <rdfs:domain rdf:resource="#FeatureDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#windowDays">
+    <rdfs:domain rdf:resource="#FeatureDefinition"/>
+    <rdfs:range rdf:resource="&xsd;integer"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#transform">
+    <rdfs:domain rdf:resource="#FeatureDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#missingPolicy">
+    <rdfs:domain rdf:resource="#FeatureDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#dtype">
+    <rdfs:domain rdf:resource="#FeatureDefinition"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <!-- FeatureVectorSnapshot fields -->
+  <owl:DatatypeProperty rdf:about="#snapshotId">
+    <rdfs:domain rdf:resource="#FeatureVectorSnapshot"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#snapshotCreatedAt">
+    <rdfs:domain rdf:resource="#FeatureVectorSnapshot"/>
+    <rdfs:range rdf:resource="&xsd;dateTime"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#snapshotModelVersion">
+    <rdfs:domain rdf:resource="#FeatureVectorSnapshot"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#featureValuesJSON">
+    <rdfs:domain rdf:resource="#FeatureVectorSnapshot"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+    <rdfs:comment>
+      Store feature_id to value map as JSON string in OWL. Canonical storage is in MongoDB.
+    </rdfs:comment>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#provenanceJSON">
+    <rdfs:domain rdf:resource="#FeatureVectorSnapshot"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <!-- RiskPrediction fields -->
+  <owl:DatatypeProperty rdf:about="#predictionId">
+    <rdfs:domain rdf:resource="#RiskPrediction"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#riskScore">
+    <rdfs:domain rdf:resource="#RiskPrediction"/>
+    <rdfs:range rdf:resource="&xsd;decimal"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#riskLabel">
+    <rdfs:domain rdf:resource="#RiskPrediction"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <!-- Explanation fields -->
+  <owl:DatatypeProperty rdf:about="#explanationId">
+    <rdfs:domain rdf:resource="#Explanation"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#summaryShort">
+    <rdfs:domain rdf:resource="#Explanation"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#targetType">
+    <rdfs:domain rdf:resource="#Explanation"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#targetId">
+    <rdfs:domain rdf:resource="#Explanation"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <!-- AuditLog fields -->
+  <owl:DatatypeProperty rdf:about="#auditId">
+    <rdfs:domain rdf:resource="#AuditLog"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#auditEventType">
+    <rdfs:domain rdf:resource="#AuditLog"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="#auditPayloadJSON">
+    <rdfs:domain rdf:resource="#AuditLog"/>
+    <rdfs:range rdf:resource="&xsd;string"/>
+  </owl:DatatypeProperty>
+
+</rdf:RDF>

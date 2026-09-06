@@ -1,0 +1,79 @@
+[
+  {
+    "id": "guideline-001",
+    "title": "Initial therapy for most adults with type 2 diabetes",
+    "condition": "Type 2 diabetes requiring pharmacologic treatment without a clear insulin-first indication",
+    "recommendation": "Lifestyle therapy plus metformin is a common initial pharmacologic approach when tolerated and not contraindicated.",
+    "notes": "Use a patient-centered approach and reassess regularly if glycemic targets are not met.",
+    "source": "ADA-like guideline",
+    "source_url": "https://www.niddk.nih.gov/health-information/diabetes/overview/insulin-medicines-treatments",
+    "condition_type": "initial_therapy",
+    "recommendation_type": "first_line"
+  },
+  {
+    "id": "guideline-002",
+    "title": "Escalate beyond monotherapy when control remains above target",
+    "condition": "Type 2 diabetes with HbA1c above individualized target or markedly elevated at presentation",
+    "recommendation": "Consider early combination or add-on therapy rather than waiting for prolonged monotherapy failure.",
+    "notes": "Escalation should reflect current treatment, glycemic burden, and patient-specific factors.",
+    "source": "ADA-like guideline",
+    "source_url": "https://professional.diabetes.org/sites/default/files/media/2_fri_1245_neumiller.pdf",
+    "condition_type": "glycemic_escalation",
+    "recommendation_type": "add_on"
+  },
+  {
+    "id": "guideline-003",
+    "title": "Consider insulin when hyperglycemia is severe",
+    "condition": "Type 2 diabetes with catabolic features, symptomatic hyperglycemia, HbA1c greater than 10%, or blood glucose at or above 300 mg/dL",
+    "recommendation": "Consider insulin initiation or insulin as the first injectable therapy.",
+    "notes": "This is especially relevant when symptoms or ongoing catabolism suggest the patient needs faster glycemic control.",
+    "source": "ADA-like guideline",
+    "source_url": "https://professional.diabetes.org/sites/default/files/media/2_fri_1245_neumiller.pdf",
+    "condition_type": "severe_hyperglycemia",
+    "recommendation_type": "insulin_initiation"
+  },
+  {
+    "id": "guideline-004",
+    "title": "Prioritize cardiorenal benefit when comorbidities are present",
+    "condition": "Type 2 diabetes with established atherosclerotic cardiovascular disease, chronic kidney disease, or heart failure",
+    "recommendation": "Use an SGLT2 inhibitor or GLP-1 receptor agonist with demonstrated cardiorenal benefit as part of the glucose-lowering regimen, independent of baseline HbA1c when appropriate.",
+    "notes": "Comorbid cardiovascular, kidney, and heart failure status should influence agent selection early.",
+    "source": "ADA-like guideline",
+    "source_url": "https://professional.diabetes.org/sites/default/files/media/2_fri_1245_neumiller.pdf",
+    "condition_type": "cardiorenal_comorbidity",
+    "recommendation_type": "comorbidity_directed"
+  },
+  {
+    "id": "guideline-005",
+    "title": "Continue metformin when intensifying therapy if tolerated",
+    "condition": "Patient is already taking metformin and it remains tolerated without contraindication",
+    "recommendation": "Continue metformin while adding another agent or insulin when additional glycemic control is needed.",
+    "notes": "Metformin often remains part of combination therapy unless contraindications emerge.",
+    "source": "ADA-like guideline",
+    "source_url": "https://professional.diabetes.org/sites/default/files/media/2_fri_1245_neumiller.pdf",
+    "condition_type": "combination_therapy",
+    "recommendation_type": "continue_foundation"
+  },
+  {
+    "id": "guideline-006",
+    "title": "Account for weight and hypoglycemia priorities",
+    "condition": "Patient needs to minimize hypoglycemia or would benefit from weight reduction",
+    "recommendation": "Prefer agents with lower hypoglycemia risk and consider weight-beneficial options such as GLP-1 receptor agonists or SGLT2 inhibitors when clinically appropriate.",
+    "notes": "Treatment choice should reflect weight impact, hypoglycemia risk, cost, and patient preference.",
+    "source": "ADA-like guideline",
+    "source_url": "https://professional.diabetes.org/sites/default/files/media/2_fri_1245_neumiller.pdf",
+    "condition_type": "treatment_priority",
+    "recommendation_type": "agent_selection"
+  },
+  {
+    "id": "guideline-007",
+    "title": "Type 1 diabetes requires insulin therapy",
+    "condition": "Type 1 diabetes",
+    "recommendation": "Insulin therapy is required; non-insulin medications are adjunctive only in selected situations.",
+    "notes": "Adults with type 1 diabetes generally require insulin therapy for ongoing management.",
+    "source": "ADA-like guideline",
+    "source_url": "https://professional.diabetes.org/sites/default/files/2024-12/t1d-glycemic-management.pdf",
+    "condition_type": "type_1_diabetes",
+    "recommendation_type": "insulin_required"
+  }
+]
